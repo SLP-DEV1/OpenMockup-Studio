@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" role="img" aria-label="Workflow GIF placeholder">
+  <rect width="1280" height="360" fill="#18202f"/>
+  <g fill="#ffffff" font-family="Arial, sans-serif" text-anchor="middle">
+    <text x="640" y="150" font-size="34" font-weight="700">Workflow GIF Placeholder</text>
+    <text x="640" y="205" font-size="22">Upload PSD -> Choose designs -> Preview -> Export ZIP</text>
+  </g>
+  <g fill="none" stroke="#5bb9a8" stroke-width="4">
+    <circle cx="280" cy="250" r="28"/>
+    <circle cx="480" cy="250" r="28"/>
+    <circle cx="680" cy="250" r="28"/>
+    <circle cx="880" cy="250" r="28"/>
+    <path d="M310 250H450M510 250H650M710 250H850"/>
+  </g>
+</svg>
