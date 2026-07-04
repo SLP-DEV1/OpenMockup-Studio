@@ -21,7 +21,40 @@ npm install
 npm run dev
 ```
 
-The app runs locally in the browser. No backend server is required for image processing; Vite is only used for local development.
+The app runs locally in the browser. Vite is used for local development and also serves uploaded design assets to Photopea during rendering.
+
+## Photopea rendering during development
+
+Photopea runs inside an iframe from `https://www.photopea.com`. Browser security prevents that iframe from loading design files from `http://127.0.0.1` or `http://localhost`. For Smart Object replacement, the design asset must be reachable through a public HTTPS URL with CORS enabled.
+
+The easiest development command is:
+
+```bash
+npm run dev:public
+```
+
+This starts a temporary Cloudflare Tunnel and starts Vite with `OPENMOCKUP_PUBLIC_BASE_URL` set automatically. Open the shown `https://...trycloudflare.com` URL in your browser.
+
+If you start the tunnel manually, set the public base URL before starting Vite:
+
+Windows PowerShell:
+
+```powershell
+$env:OPENMOCKUP_PUBLIC_BASE_URL="https://your-public-tunnel.example"
+npm run dev
+```
+
+Windows CMD:
+
+```cmd
+set OPENMOCKUP_PUBLIC_BASE_URL=https://your-public-tunnel.example&& npm run dev
+```
+
+macOS / Linux:
+
+```bash
+OPENMOCKUP_PUBLIC_BASE_URL=https://your-public-tunnel.example npm run dev
+```
 
 ## Folder Structure
 

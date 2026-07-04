@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx *)",
+      "Bash(npm run *)",
+      "Bash(start *)",
+      "Bash(node *)",
+      "Bash(findstr *)",
+      "Bash(timeout *)",
+      "Bash(type *)",
+      "Bash(taskkill *)",
+      "Bash(tasklist)",
+      "computer_use__page",
+      "Bash(netstat *)"
+    ]
+  },
+  "$version": 4
+}

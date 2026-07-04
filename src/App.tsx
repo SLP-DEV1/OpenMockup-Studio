@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FileDrop } from "./components/FileDrop";
 import { PhotopeaFrame } from "./components/PhotopeaFrame";
 import { PreviewPane } from "./components/PreviewPane";
@@ -7,12 +7,25 @@ import { downloadZip, readPreset, safeOutputName, savePreset } from "./lib/expor
 import { PhotopeaClient } from "./lib/photopea";
 import type { ExportResult, LoadedAsset, MockupSettings, ProgressState } from "./types";
 
+function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => reject(new Error(`Could not load image dimensions from ${file.name}`));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 const defaultSettings: MockupSettings = {
-  smartObjectName: "Your Design Here",
+  smartObjectName: "YouR Logo hERE",
   left: 0,
   top: 0,
   width: 100,
   height: 100,
+  areaLeftPercent: 38,
+  areaTopPercent: 25,
+  areaWidthPercent: 24,
+  areaHeightPercent: 32,
   rotation: 0,
   opacity: 100,
   fitMode: "contain",
@@ -20,25 +33,37 @@ const defaultSettings: MockupSettings = {
 };
 
 export default function App() {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const clientRef = useRef<PhotopeaClient | null>(null);
+  const photopeaClientRef = useRef<PhotopeaClient | null>(null);
   const [psd, setPsd] = useState<File | undefined>();
   const [designs, setDesigns] = useState<LoadedAsset[]>([]);
   const [settings, setSettings] = useState<MockupSettings>(defaultSettings);
   const [preview, setPreview] = useState<ExportResult | undefined>();
   const [progress, setProgress] = useState<ProgressState | undefined>();
   const [status, setStatus] = useState("Loading Photopea...");
+  const [stepLabel, setStepLabel] = useState<string>("");
   const [isBusy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (!iframeRef.current) return;
-    const client = new PhotopeaClient(iframeRef.current);
-    clientRef.current = client;
+  const handlePhotopeaFrame = useCallback((iframe: HTMLIFrameElement | null) => {
+    if (!iframe || photopeaClientRef.current) return;
+
+    const client = new PhotopeaClient(iframe, (info) => {
+      // Update step label in the UI status pill
+      if (info.startedAt && !info.durationMs) {
+        setStepLabel(info.label);
+      } else if (info.durationMs !== undefined) {
+        // Step completed — clear or show duration briefly
+        if (info.step !== "photopea") {
+          setStepLabel(`Done: ${info.label} (${(info.durationMs / 1000).toFixed(1)}s)`);
+          setTimeout(() => setStepLabel(""), 500);
+        }
+      }
+    });
+    photopeaClientRef.current = client;
     client
       .waitUntilReady()
       .then(() => setStatus("Ready for PSDs and designs."))
       .catch((error) => setStatus(error instanceof Error ? error.message : "Photopea could not be loaded."));
-    return () => client.destroy();
+    return;
   }, []);
 
   useEffect(() => {
@@ -62,7 +87,7 @@ export default function App() {
   }
 
   async function generatePreview(): Promise<void> {
-    if (!canRun || !psd || !clientRef.current) {
+    if (!canRun || !psd || !photopeaClientRef.current) {
       setStatus("Please add a PSD, at least one design, and a layer name.");
       return;
     }
@@ -70,7 +95,8 @@ export default function App() {
     setBusy(true);
     setProgress({ current: 0, total: 1, label: "Rendering preview" });
     try {
-      const blob = await clientRef.current.renderMockup(psd, designs[0].file, settings);
+      const { width: designWidth, height: designHeight } = await getImageDimensions(designs[0].file);
+      const blob = await photopeaClientRef.current.renderMockup(psd, designs[0].file, settings, designWidth, designHeight);
       if (preview) URL.revokeObjectURL(preview.url);
       setPreview({
         fileName: safeOutputName(designs[0].file.name, 0),
@@ -88,7 +114,7 @@ export default function App() {
   }
 
   async function exportBatch(): Promise<void> {
-    if (!canRun || !psd || !clientRef.current) {
+    if (!canRun || !psd || !photopeaClientRef.current) {
       setStatus("Please check the PSD, designs, and layer name.");
       return;
     }
@@ -99,7 +125,8 @@ export default function App() {
       for (let index = 0; index < designs.length; index += 1) {
         const design = designs[index];
         setProgress({ current: index, total: designs.length, label: `Export: ${design.file.name}` });
-        const blob = await clientRef.current.renderMockup(psd, design.file, settings);
+        const { width: dw, height: dh } = await getImageDimensions(design.file);
+        const blob = await photopeaClientRef.current.renderMockup(psd, design.file, settings, dw, dh);
         results.push({
           fileName: safeOutputName(design.file.name, index),
           blob,
@@ -135,7 +162,7 @@ export default function App() {
           <p className="eyebrow">Local bulk mockup tool</p>
           <h1>OpenMockup Studio</h1>
         </div>
-        <span className="status-pill">{status}</span>
+        <span className="status-pill">{stepLabel ? `${status} — ${stepLabel}` : status}</span>
       </header>
 
       <div className="layout">
@@ -176,7 +203,7 @@ export default function App() {
         />
       </div>
 
-      <PhotopeaFrame ref={iframeRef} />
+      <PhotopeaFrame ref={handlePhotopeaFrame} />
     </main>
   );
 }

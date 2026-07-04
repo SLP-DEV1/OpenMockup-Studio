@@ -38,7 +38,13 @@ export async function readPreset(file: File): Promise<MockupSettings> {
     throw new Error("Preset is invalid or incomplete.");
   }
 
-  return value;
+  return {
+    ...value,
+    areaLeftPercent: typeof value.areaLeftPercent === "number" ? value.areaLeftPercent : 38,
+    areaTopPercent: typeof value.areaTopPercent === "number" ? value.areaTopPercent : 25,
+    areaWidthPercent: typeof value.areaWidthPercent === "number" ? value.areaWidthPercent : 24,
+    areaHeightPercent: typeof value.areaHeightPercent === "number" ? value.areaHeightPercent : 32,
+  };
 }
 
 export function safeOutputName(inputName: string, index: number): string {
