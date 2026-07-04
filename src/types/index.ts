@@ -7,6 +7,8 @@ export type Anchor =
   | "bottom-left"
   | "bottom-right";
 
+export type ExportFormat = "png" | "jpg" | "webp";
+
 export const PHOTOPEA_STEPS = [
   "closeAll",
   "openPsd",
@@ -44,6 +46,21 @@ export interface MockupSettings {
   anchor: Anchor;
 }
 
+export interface SavedPreset {
+  id: string;
+  name: string;
+  settings: MockupSettings;
+  updatedAt: number;
+}
+
+export interface ExportOptions {
+  filenameTemplate: string;
+  zipName: string;
+  format: ExportFormat;
+  quality: number;
+  backgroundColor: string;
+}
+
 export interface LoadedAsset {
   id: string;
   file: File;
@@ -54,6 +71,12 @@ export interface ExportResult {
   fileName: string;
   blob: Blob;
   url: string;
+}
+
+export interface BatchError {
+  mockupName: string;
+  designName: string;
+  message: string;
 }
 
 export interface ProgressState {

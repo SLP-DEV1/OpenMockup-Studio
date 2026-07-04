@@ -351,3 +351,58 @@ h2 {
     grid-template-columns: 1fr;
   }
 }
+
+.preset-manager {
+  border: 1px solid #edf1f7;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.preset-actions,
+.export-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.export-panel {
+  border: 1px solid #dce2ec;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.export-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.small-text {
+  font-size: 12px;
+}
+
+.error-list {
+  background: #fff3f0;
+  border: 1px solid #ffbcad;
+  border-radius: 8px;
+  color: #7a2014;
+  padding: 12px;
+}
+
+.error-list summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.error-list p {
+  margin: 8px 0 0;
+}
+
+@media (max-width: 920px) {
+  .export-grid,
+  .preset-actions {
+    grid-template-columns: 1fr;
+  }
+}

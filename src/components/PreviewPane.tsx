@@ -1,11 +1,14 @@
-import type { ExportResult, LoadedAsset, ProgressState } from "../types";
+import type { BatchError, ExportOptions, ExportResult, LoadedAsset, ProgressState } from "../types";
 
 interface PreviewPaneProps {
-  psdName?: string;
+  psdNames: string[];
   designs: LoadedAsset[];
   preview?: ExportResult;
   progress?: ProgressState;
+  batchErrors: BatchError[];
   isBusy: boolean;
+  exportOptions: ExportOptions;
+  onExportOptionsChange: (options: ExportOptions) => void;
   onPreview: () => void;
   onBatch: () => void;
   onSavePreset: () => void;
@@ -13,29 +16,38 @@ interface PreviewPaneProps {
 }
 
 export function PreviewPane({
-  psdName,
+  psdNames,
   designs,
   preview,
   progress,
+  batchErrors,
   isBusy,
+  exportOptions,
+  onExportOptionsChange,
   onPreview,
   onBatch,
   onSavePreset,
   onLoadPreset,
 }: PreviewPaneProps) {
+  function patchExport(update: Partial<ExportOptions>): void {
+    onExportOptionsChange({ ...exportOptions, ...update });
+  }
+
+  const totalExports = Math.max(0, psdNames.length * designs.length);
+
   return (
     <section className="workspace">
       <div className="workspace__topbar">
         <div>
           <h2>Preview</h2>
-          <p>{psdName ? `PSD: ${psdName}` : "No PSD loaded yet"}</p>
+          <p>{psdNames.length ? `${psdNames.length} PSD${psdNames.length === 1 ? "" : "s"}: ${psdNames.join(", ")}` : "No PSD loaded yet"}</p>
         </div>
         <div className="actions">
           <button type="button" onClick={onPreview} disabled={isBusy}>
             Generate Preview
           </button>
-          <button type="button" className="button-primary" onClick={onBatch} disabled={isBusy}>
-            Export Batch
+          <button type="button" className="button-primary" onClick={onBatch} disabled={isBusy || totalExports === 0}>
+            Export All{totalExports ? ` (${totalExports})` : ""}
           </button>
         </div>
       </div>
@@ -54,6 +66,63 @@ export function PreviewPane({
         </div>
       ) : null}
 
+      {batchErrors.length ? (
+        <details className="error-list" open>
+          <summary>{batchErrors.length} export error{batchErrors.length === 1 ? "" : "s"}</summary>
+          {batchErrors.map((error, index) => (
+            <p key={`${error.mockupName}-${error.designName}-${index}`}>
+              <strong>{error.mockupName}</strong> + <strong>{error.designName}</strong>: {error.message}
+            </p>
+          ))}
+        </details>
+      ) : null}
+
+      <section className="export-panel">
+        <div className="panel__header">
+          <h2>Export Options</h2>
+        </div>
+        <div className="export-grid">
+          <label className="field field--wide">
+            <span>Filename Template</span>
+            <input
+              value={exportOptions.filenameTemplate}
+              onChange={(event) => patchExport({ filenameTemplate: event.target.value })}
+              placeholder="{index}-{mockup}-{design}.{ext}"
+            />
+          </label>
+          <label className="field">
+            <span>ZIP Name</span>
+            <input value={exportOptions.zipName} onChange={(event) => patchExport({ zipName: event.target.value })} />
+          </label>
+          <label className="field">
+            <span>Format</span>
+            <select value={exportOptions.format} onChange={(event) => patchExport({ format: event.target.value as ExportOptions["format"] })}>
+              <option value="png">PNG</option>
+              <option value="jpg">JPG</option>
+              <option value="webp">WebP</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Quality</span>
+            <input
+              type="number"
+              min="1"
+              max="100"
+              value={exportOptions.quality}
+              disabled={exportOptions.format === "png"}
+              onChange={(event) => patchExport({ quality: Number(event.target.value) })}
+            />
+          </label>
+          <label className="field">
+            <span>JPG/WebP Background</span>
+            <input type="color" value={exportOptions.backgroundColor} onChange={(event) => patchExport({ backgroundColor: event.target.value })} />
+          </label>
+        </div>
+        <p className="muted small-text">
+          Variables: {"{design}"}, {"{mockup}"}, {"{index}"}, {"{date}"}, {"{preset}"}, {"{ext}"}
+        </p>
+      </section>
+
       <div className="design-strip">
         {designs.length === 0 ? (
           <span className="muted">No designs loaded yet</span>
@@ -69,10 +138,10 @@ export function PreviewPane({
 
       <div className="preset-row">
         <button type="button" onClick={onSavePreset}>
-          Save Preset
+          Export Preset JSON
         </button>
         <label className="button-like">
-          Load Preset
+          Import Preset JSON
           <input
             type="file"
             accept="application/json,.json"
