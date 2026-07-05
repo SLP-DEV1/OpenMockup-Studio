@@ -20,6 +20,10 @@ export function downloadBlob(blob: Blob, fileName: string): void {
   URL.revokeObjectURL(url);
 }
 
+function csvValue(value: string): string {
+  return `"${String(value || "").replace(/"/g, '""')}"`;
+}
+
 export async function downloadZip(results: ExportResult[], zipName: string, errors: BatchError[] = []): Promise<void> {
   const zip = new JSZip();
 
@@ -35,6 +39,13 @@ export async function downloadZip(results: ExportResult[], zipName: string, erro
         .join("\n\n"),
     );
   }
+
+  const reportRows = [
+    ["type", "file", "mockup", "design", "message"].map(csvValue).join(","),
+    ...results.map((result) => ["success", result.fileName, "", "", ""].map(csvValue).join(",")),
+    ...errors.map((error) => ["error", "", error.mockupName, error.designName, error.message].map(csvValue).join(",")),
+  ];
+  zip.file("_openmockup-report.csv", reportRows.join("\n"));
 
   const blob = await zip.generateAsync({ type: "blob" });
   downloadBlob(blob, zipName.endsWith(".zip") ? zipName : `${zipName}.zip`);

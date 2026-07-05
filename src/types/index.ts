@@ -8,6 +8,8 @@ export type Anchor =
   | "bottom-right";
 
 export type ExportFormat = "png" | "jpg" | "webp";
+export type CropPreset = "none" | "square" | "portrait45" | "pinterest23" | "story916";
+export type WatermarkPosition = "bottom-right" | "bottom-left" | "top-right" | "top-left" | "center";
 
 export const PHOTOPEA_STEPS = [
   "closeAll",
@@ -53,12 +55,32 @@ export interface SavedPreset {
   updatedAt: number;
 }
 
+export interface ProductProfile {
+  id: string;
+  name: string;
+  description: string;
+  settings: MockupSettings;
+  exportDefaults?: Partial<ExportOptions>;
+}
+
+export interface ExportProfile {
+  id: string;
+  name: string;
+  description: string;
+  options: Partial<ExportOptions>;
+}
+
 export interface ExportOptions {
   filenameTemplate: string;
   zipName: string;
   format: ExportFormat;
   quality: number;
   backgroundColor: string;
+  maxLongSide: number;
+  cropPreset: CropPreset;
+  watermarkText: string;
+  watermarkOpacity: number;
+  watermarkPosition: WatermarkPosition;
 }
 
 export interface LoadedAsset {
@@ -77,10 +99,33 @@ export interface BatchError {
   mockupName: string;
   designName: string;
   message: string;
+  step?: string;
 }
 
 export interface ProgressState {
   current: number;
   total: number;
   label: string;
+}
+
+export interface RenderHistoryItem {
+  id: string;
+  date: string;
+  mode: "preview" | "batch";
+  mockups: number;
+  designs: number;
+  exported: number;
+  failed: number;
+  presetName?: string;
+  zipName?: string;
+}
+
+export interface DesignWarning {
+  fileName: string;
+  message: string;
+}
+
+export interface DocumentSize {
+  width: number;
+  height: number;
 }

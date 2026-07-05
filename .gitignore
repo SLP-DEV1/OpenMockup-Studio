@@ -1,16 +1,52 @@
-﻿# Dependencies
+# Dependencies
 node_modules/
 .pnp
 .pnp.*
 
-# Production build
-/dist/
-/build/
+# Build output
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Vite / tooling caches
+.vite/
+.cache/
+.tmp/
+
+# Package manager caches
+.npm/
+.pnpm-store/
+yarn.lock.bak
+
+# Environment files
+.env
+.env.*
+!.env.example
 
 # Local generated files
-/outputs/
-/work/
-*.local
+outputs/
+work/
+exports/
+*.zip
+*.7z
+*.rar
+
+# Local mockup/design assets
+# Keep examples in docs/ or examples/ if you intentionally want to commit them.
+*.psd
+*.psb
+*.ai
+*.eps
+*.tif
+*.tiff
+
+# OpenMockup runtime files
+.openmockup-pids.bat
+.openmockup-public-url.txt
+*.pid
+*.pid.lock
+*.seed
 
 # Logs
 logs/
@@ -20,20 +56,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
-# Environment files
-.env
-.env.*
-!.env.example
-
-# Vite / tooling cache
-.vite/
-.cache/
-.tmp/
-coverage/
-
-# TypeScript
-*.tsbuildinfo
+start.log
+stop.log
 
 # Editor settings
 .vscode/*
@@ -46,3 +70,7 @@ coverage/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Downloaded helper binaries
+tools/*.exe
+tools/cloudflared*

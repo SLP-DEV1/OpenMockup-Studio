@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="Screenshot placeholder">
-  <rect width="1280" height="720" fill="#f5f7fb"/>
-  <rect x="40" y="40" width="1200" height="640" rx="8" fill="#ffffff" stroke="#dce2ec"/>
-  <rect x="80" y="96" width="320" height="120" rx="8" fill="#eef2f8"/>
-  <rect x="80" y="240" width="320" height="360" rx="8" fill="#eef2f8"/>
-  <rect x="440" y="96" width="760" height="504" rx="8" fill="#e8edf5"/>
-  <text x="640" y="360" text-anchor="middle" fill="#465266" font-family="Arial, sans-serif" font-size="34" font-weight="700">OpenMockup Studio Screenshot</text>
-</svg>

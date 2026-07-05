@@ -1,10 +1,16 @@
-import { defineConfig } from "vite";
+import { randomUUID } from "node:crypto";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
 type StoredDesign = {
   buffer: Buffer;
   contentType: string;
+  createdAt: number;
 };
+
+const DESIGN_TTL_MS = Number(process.env.OPENMOCKUP_DESIGN_TTL_MS ?? 30 * 60 * 1000);
+const MAX_DESIGN_BYTES = Math.max(1, Number(process.env.OPENMOCKUP_MAX_DESIGN_MB ?? 50)) * 1024 * 1024;
 
 function normalizePublicBaseUrl(value: string | undefined): string | null {
   if (!value) return null;
@@ -17,18 +23,28 @@ function extensionForContentType(contentType: string): string {
   return ".png";
 }
 
-function openMockupDesignServer() {
+function openMockupDesignServer(): Plugin {
   const designs = new Map<string, StoredDesign>();
   const publicBaseUrl = normalizePublicBaseUrl(
     process.env.OPENMOCKUP_PUBLIC_BASE_URL || process.env.VITE_OPENMOCKUP_PUBLIC_BASE_URL,
   );
 
-  function middleware(req, res, next) {
+  function cleanupDesigns(): void {
+    const expiresBefore = Date.now() - DESIGN_TTL_MS;
+    for (const [id, item] of designs) {
+      if (item.createdAt < expiresBefore) designs.delete(id);
+    }
+  }
+
+  function middleware(req: IncomingMessage, res: ServerResponse, next: () => void): void {
     const url = req.url ?? "/";
 
     if (!url.startsWith("/__openmockup/design")) {
-      return next();
+      next();
+      return;
     }
+
+    cleanupDesigns();
 
     const method = req.method ?? "GET";
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -44,26 +60,50 @@ function openMockupDesignServer() {
 
     if (method === "POST") {
       const chunks: Buffer[] = [];
-      req.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+      let receivedBytes = 0;
+      let tooLarge = false;
+
+      req.on("data", (chunk) => {
+        if (tooLarge) return;
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        receivedBytes += buffer.byteLength;
+        if (receivedBytes > MAX_DESIGN_BYTES) {
+          tooLarge = true;
+          res.statusCode = 413;
+          res.end(`Design upload is larger than ${Math.round(MAX_DESIGN_BYTES / 1024 / 1024)} MB.`);
+          req.destroy();
+          return;
+        }
+        chunks.push(buffer);
+      });
+
       req.on("end", () => {
+        if (tooLarge) return;
         const contentType = req.headers["content-type"] ?? "application/octet-stream";
         const normalizedContentType = Array.isArray(contentType) ? contentType[0] : contentType;
-        const id = `${crypto.randomUUID()}${extensionForContentType(normalizedContentType)}`;
-        designs.set(id, { buffer: Buffer.concat(chunks), contentType: normalizedContentType });
+        const id = `${randomUUID()}${extensionForContentType(normalizedContentType)}`;
+        designs.set(id, {
+          buffer: Buffer.concat(chunks),
+          contentType: normalizedContentType,
+          createdAt: Date.now(),
+        });
         const path = `/__openmockup/design/${id}`;
         res.statusCode = 200;
         res.setHeader("Content-Type", "application/json");
         res.end(JSON.stringify({ url: publicBaseUrl ? `${publicBaseUrl}${path}` : path }));
       });
+
       req.on("error", () => {
-        res.statusCode = 500;
-        res.end("upload failed");
+        if (!res.headersSent) {
+          res.statusCode = 500;
+          res.end("upload failed");
+        }
       });
       return;
     }
 
     if (method === "GET") {
-      const id = url.replace(/^\/__openmockup\/design\//, "").split("?")[0];
+      const id = decodeURIComponent(url.replace(/^\/__openmockup\/design\//, "").split("?")[0] || "");
       const item = designs.get(id);
       if (!item) {
         res.statusCode = 404;

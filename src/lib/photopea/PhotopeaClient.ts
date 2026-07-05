@@ -1,3 +1,4 @@
+import { loadImageFromFile } from "../images";
 import {
   buildOpenAsSmartInPsdScript,
   buildPreviewCleanupAndSelectScript,
@@ -101,22 +102,6 @@ function clampNumber(value: number, min: number, max: number): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return min;
   return Math.max(min, Math.min(max, parsed));
-}
-
-function loadImageElement(file: File): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(image);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error(`Could not render transformed design from ${file.name}`));
-    };
-    image.src = url;
-  });
 }
 
 function canvasToPngFile(canvas: HTMLCanvasElement, originalFile: File): Promise<File> {
@@ -223,7 +208,7 @@ async function createBrowserPlacedDesignFile(
   designWidth?: number,
   designHeight?: number,
 ): Promise<{ file: File; details: BrowserPlacedDesignDetails }> {
-  const image = await loadImageElement(design);
+  const image = await loadImageFromFile(design);
   const naturalW = Math.max(1, designWidth || image.naturalWidth || image.width || 1);
   const naturalH = Math.max(1, designHeight || image.naturalHeight || image.height || 1);
   const safeDocW = Math.max(1, Math.round(docWidth || 3000));
@@ -259,7 +244,14 @@ async function createBrowserPlacedDesignFile(
   return { file, details };
 }
 
-const PHOTOPEA_URL = "https://www.photopea.com#";
+const PHOTOPEA_ORIGIN = "https://www.photopea.com";
+const PHOTOPEA_URL = `${PHOTOPEA_ORIGIN}#`;
+function isDebugEnabled(): boolean {
+  try { return window.localStorage.getItem("openmockup.debug") === "1"; } catch { return false; }
+}
+function debugLog(...args: unknown[]): void {
+  if (isDebugEnabled()) console.log(...args);
+}
 const ACTION_TIMEOUT_SCRIPT_MS = 120_000;
 const ACTION_TIMEOUT_FILE_MS = 300_000;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
@@ -316,7 +308,7 @@ async function verifyDesignUrlForPhotopea(designUrl: string): Promise<void> {
     throw new Error("Design URL returned an empty file.");
   }
 
-  console.log(`[OpenMockup] verified public design URL (${contentType}, ${(blob.size / 1024).toFixed(1)} KB): ${designUrl}`);
+  debugLog(`[OpenMockup] verified public design URL (${contentType}, ${(blob.size / 1024).toFixed(1)} KB): ${designUrl}`);
 }
 
 type PendingAction = {
@@ -334,9 +326,9 @@ export type StepCallback = (info: PhotopeaStepInfo) => void;
 
 const DEFAULT_STEP_CALLBACK: StepCallback = (info) => {
   if (info.startedAt && !info.durationMs) {
-    console.log(`[Photopea] start ${info.step} - ${info.label}`);
+    debugLog(`[Photopea] start ${info.step} - ${info.label}`);
   } else if (info.durationMs !== undefined) {
-    console.log(`[Photopea] done ${info.step} - ${info.label} (${info.durationMs}ms)`);
+    debugLog(`[Photopea] done ${info.step} - ${info.label} (${info.durationMs}ms)`);
   }
 };
 
@@ -348,12 +340,11 @@ export class PhotopeaClient {
   private isReady = false;
   private stepCallback: StepCallback;
   private fatalError: Error | null = null;
-  private lastStepMessages: string[] = [];
   private loadedPsdKey: string | null = null;
   private loadedPsdSize: { width: number; height: number } | null = null;
 
   constructor(iframe: HTMLIFrameElement, onStep?: StepCallback) {
-    console.log("[OpenMockup] PhotopeaClient created");
+    debugLog("[OpenMockup] PhotopeaClient created");
     this.iframe = iframe;
     this.stepCallback = onStep ?? DEFAULT_STEP_CALLBACK;
     this.readyPromise = new Promise((resolve) => {
@@ -412,13 +403,13 @@ export class PhotopeaClient {
     await this.waitUntilReady();
     this.fatalError = null;
 
-    console.log(`[Photopea] renderMockup: PSD="${psd.name}", Design="${design.name}"${designWidth ? `, designSize=${designWidth}x${designHeight}` : ""}`);
-    console.log("[OpenMockup] render settings:", settings);
+    debugLog(`[Photopea] renderMockup: PSD="${psd.name}", Design="${design.name}"${designWidth ? `, designSize=${designWidth}x${designHeight}` : ""}`);
+    debugLog("[OpenMockup] render settings:", settings);
     const normalizedSettings = normalizeSettings(settings);
-    console.log("[OpenMockup] normalized settings:", normalizedSettings);
+    debugLog("[OpenMockup] normalized settings:", normalizedSettings);
     const currentPsdKey = psdCacheKey(psd);
-    console.log("[OpenMockup] psdKey current:", currentPsdKey);
-    console.log("[OpenMockup] loadedPsdKey:", this.loadedPsdKey);
+    debugLog("[OpenMockup] psdKey current:", currentPsdKey);
+    debugLog("[OpenMockup] loadedPsdKey:", this.loadedPsdKey);
 
     // Stable MVP mode: always reload the PSD for each render.
     // Reusing Photopea documents caused nested-layer selection and cleanup issues.
@@ -464,7 +455,7 @@ export class PhotopeaClient {
       if (parsedPsdSize) {
         docWidth = parsedPsdSize.width;
         docHeight = parsedPsdSize.height;
-        console.log(`[OpenMockup] PSD file header size: ${docWidth}x${docHeight}`);
+        debugLog(`[OpenMockup] PSD file header size: ${docWidth}x${docHeight}`);
       } else {
         // Safe fallback: avoids Photopea DOM doc.width/doc.height crashes on some PSDs.
         docWidth = 3000;
@@ -481,7 +472,7 @@ export class PhotopeaClient {
 
       this.loadedPsdKey = currentPsdKey;
       this.loadedPsdSize = { width: docWidth, height: docHeight };
-      console.log("[OpenMockup] loadedPsdKey set:", this.loadedPsdKey);
+      debugLog("[OpenMockup] loadedPsdKey set:", this.loadedPsdKey);
       await this.runPhotopeaStep(
         "psdCache",
         "Stored loaded PSD cache",
@@ -496,7 +487,7 @@ export class PhotopeaClient {
         () => this.echoStep("STEP:psdCache:reuse"),
       );
     }
-    console.log(`[Photopea] PSD document size: ${docWidth}x${docHeight}`);
+    debugLog(`[Photopea] PSD document size: ${docWidth}x${docHeight}`);
 
     const placedDesign = await this.runPhotopeaStep(
       "browserTransform",
@@ -512,7 +503,7 @@ export class PhotopeaClient {
           designHeight,
         );
         const d = result.details;
-        console.log("[OpenMockup] browser placement details:", d);
+        debugLog("[OpenMockup] browser placement details:", d);
         await this.echoStep(
           `STEP:browserTransform:area:${d.areaX.toFixed(1)},${d.areaY.toFixed(1)},${d.areaW.toFixed(1)},${d.areaH.toFixed(1)}`,
         );
@@ -593,7 +584,7 @@ export class PhotopeaClient {
       () => this.exportPng(),
     );
 
-    console.log("[OpenMockup] render finished, loadedPsdKey:", this.loadedPsdKey);
+    debugLog("[OpenMockup] render finished, loadedPsdKey:", this.loadedPsdKey);
     return new Blob([buffer], { type: "image/png" });
   }
 
@@ -625,16 +616,16 @@ export class PhotopeaClient {
     expectedMarker?: string,
   ): Promise<ArrayBuffer | string> {
     return this.enqueue(binaryExpected, timeoutMs, expectedMarker, () => {
-      console.log(`[Photopea] send script (${script.length} chars)`);
-      this.iframe.contentWindow?.postMessage(script, "*");
+      debugLog(`[Photopea] send script (${script.length} chars)`);
+      this.iframe.contentWindow?.postMessage(script, PHOTOPEA_ORIGIN);
     });
   }
 
   private async postBinary(file: File, binaryExpected: boolean, timeoutMs = ACTION_TIMEOUT_FILE_MS): Promise<ArrayBuffer | string> {
     const buffer = await file.arrayBuffer();
     return this.enqueue(binaryExpected, timeoutMs, undefined, () => {
-      console.log(`[Photopea] send file ${file.name} (${(buffer.byteLength / 1024).toFixed(1)} KB)`);
-      this.iframe.contentWindow?.postMessage(buffer, "*", [buffer]);
+      debugLog(`[Photopea] send file ${file.name} (${(buffer.byteLength / 1024).toFixed(1)} KB)`);
+      this.iframe.contentWindow?.postMessage(buffer, PHOTOPEA_ORIGIN, [buffer]);
     });
   }
 
@@ -667,12 +658,13 @@ export class PhotopeaClient {
   // ------------------------------------------------------------------
   private handleMessage = (event: MessageEvent): void => {
     if (event.source !== this.iframe.contentWindow) return;
+    if (event.origin && event.origin !== PHOTOPEA_ORIGIN) return;
 
     const data = event.data;
 
     // 1. Diagnose-Marker vom Script (echoToOE) — nur loggen, nie resolve/reject
     if (typeof data === "string" && data.startsWith("STEP:")) {
-      console.log(`[Photopea] echo  ${data}`);
+      debugLog(`[Photopea] echo  ${data}`);
       this.pending?.stepMessages.push(data);
       if (this.pending?.expectedMarker && data.startsWith(this.pending.expectedMarker)) {
         this.pending.expectedMarkerSeen = true;
@@ -692,18 +684,18 @@ export class PhotopeaClient {
 
     // 3. ArrayBuffer — PNG-Exportdaten von saveToOE()
     if (data instanceof ArrayBuffer) {
-      console.log(`[Photopea] recv  ArrayBuffer (${(data.byteLength / 1024).toFixed(1)} KB)`);
+      debugLog(`[Photopea] recv  ArrayBuffer (${(data.byteLength / 1024).toFixed(1)} KB)`);
       if (this.pending && this.pending.binaryExpected) {
         // Zwischenspeichern — wir warten noch auf das nachfolgende "done"
         this.pending.exportBuffer = data;
-        console.log(`[Photopea] exportBuffer cached, waiting for "done"`);
+        debugLog(`[Photopea] exportBuffer cached, waiting for "done"`);
       }
       return;
     }
 
     // 4. "done" — Photopea hat ein Skript abgeschlossen
     if (data === "done") {
-      console.log(`[Photopea] recv  done`);
+      debugLog(`[Photopea] recv  done`);
 
       // Initiales "done" ohne pending = Photopea ist ready
       if (!this.pending) {
@@ -718,8 +710,7 @@ export class PhotopeaClient {
           return;
         }
         const buffer = this.pending.exportBuffer;
-        console.log(`[Photopea] export complete (buffer + done)`);
-        this.lastStepMessages = this.pending.stepMessages;
+        debugLog(`[Photopea] export complete (buffer + done)`);
         this.pending.resolve(buffer);
         this.clearPending();
         return;
@@ -742,30 +733,28 @@ export class PhotopeaClient {
 
     // 5. Unerwartete Strings — nur loggen, nicht resolve
     if (typeof data === "string") {
-      console.log(`[Photopea] recv  string (${data.length} chars): ${data.substring(0, 120)}`);
+      debugLog(`[Photopea] recv  string (${data.length} chars): ${data.substring(0, 120)}`);
       return;
     }
 
-    console.log(`[Photopea] recv  unknown type: ${typeof data}`);
+    debugLog(`[Photopea] recv  unknown type: ${typeof data}`);
   };
 
   private markReady(): void {
     if (this.isReady) return;
     this.isReady = true;
-    console.log("[Photopea] ready");
+    debugLog("[Photopea] ready");
     this.readyResolver();
   }
 
   private resolvePending(value: ArrayBuffer | string, _isBinary: boolean): void {
     if (!this.pending) return;
-    this.lastStepMessages = this.pending.stepMessages;
     this.pending.resolve(value);
     this.clearPending();
   }
 
   private rejectPending(reason: unknown): void {
     if (!this.pending) return;
-    this.lastStepMessages = this.pending.stepMessages;
     this.pending.reject(reason);
     this.clearPending();
   }
