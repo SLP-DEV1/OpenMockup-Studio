@@ -28,6 +28,7 @@ const PRESETS_STORAGE_KEY = "openmockup.presets.v2";
 const HISTORY_STORAGE_KEY = "openmockup.history.v1";
 const THEME_STORAGE_KEY = "openmockup.theme.v1";
 const DEFAULT_PRESET_ID = "tshirt-front-standard";
+const MAX_PREVIEW_CACHE_ENTRIES = 12;
 
 type MockupKind = "psd" | "image" | "unknown";
 
@@ -120,7 +121,11 @@ function loadStoredPresets(): SavedPreset[] {
 }
 
 function saveStoredPresets(presets: SavedPreset[]): void {
-  window.localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets));
+  try {
+    window.localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets));
+  } catch {
+    // Presets remain available for the current session when storage is unavailable.
+  }
 }
 
 function loadStoredHistory(): RenderHistoryItem[] {
@@ -133,7 +138,11 @@ function loadStoredHistory(): RenderHistoryItem[] {
 }
 
 function saveStoredHistory(history: RenderHistoryItem[]): void {
-  window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, 12)));
+  try {
+    window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, 12)));
+  } catch {
+    // History remains available for the current session when storage is unavailable.
+  }
 }
 
 function loadStoredTheme(): "light" | "dark" {
@@ -302,6 +311,8 @@ export default function App() {
   const previewRef = useRef<ExportResult | undefined>(undefined);
   const previewCacheRef = useRef<Record<string, ExportResult>>({});
   const previewGalleryRef = useRef<ExportResult[]>([]);
+  const mockupLoadGenerationRef = useRef(0);
+  const designLoadGenerationRef = useRef(0);
 
   const [mockups, setMockups] = useState<LoadedAsset[]>([]);
   const [designs, setDesigns] = useState<LoadedAsset[]>([]);
@@ -445,6 +456,8 @@ export default function App() {
     return () => {
       revokeAssetUrls(mockupsRef.current);
       revokeAssetUrls(designsRef.current);
+      mockupLoadGenerationRef.current += 1;
+      designLoadGenerationRef.current += 1;
       if (autoPreviewTimerRef.current) window.clearTimeout(autoPreviewTimerRef.current);
       revokeResultUrls(Object.values(previewCacheRef.current));
       revokeResultUrls(previewGalleryRef.current);
@@ -493,6 +506,7 @@ export default function App() {
   }
 
   async function handleMockups(files: File[]): Promise<void> {
+    const loadGeneration = ++mockupLoadGenerationRef.current;
     lastAutoPreviewKeyRef.current = "";
     revokeAssetUrls(mockupsRef.current);
     const assets = files.map(makeAsset);
@@ -516,6 +530,7 @@ export default function App() {
 
     for (const asset of assets) {
       const analysed = await analyseMockupAsset(asset);
+      if (loadGeneration !== mockupLoadGenerationRef.current) return;
       nextMeta[asset.id] = analysed.meta;
       nextSettings[asset.id] = analysed.settings;
       statuses.push(analysed.status);
@@ -528,6 +543,7 @@ export default function App() {
   }
 
   async function handleDesigns(files: File[]): Promise<void> {
+    const loadGeneration = ++designLoadGenerationRef.current;
     lastAutoPreviewKeyRef.current = "";
     revokeAssetUrls(designsRef.current);
     const assets = files.map(makeAsset);
@@ -541,6 +557,7 @@ export default function App() {
         try { nextDimensions[asset.id] = await getImageDimensions(asset.file); } catch {}
       }),
     );
+    if (loadGeneration !== designLoadGenerationRef.current) return;
     setDesignDimensions(nextDimensions);
     setStatus(assets.length ? `${assets.length} design${assets.length === 1 ? "" : "s"} loaded. Click a thumbnail to edit it.` : "No designs loaded.");
   }
@@ -654,7 +671,13 @@ export default function App() {
       setPreviewCache((current) => {
         const oldResult = current[previewKey];
         if (oldResult && oldResult.url !== result.url) URL.revokeObjectURL(oldResult.url);
-        return { ...current, [previewKey]: result };
+        const next = { ...current, [previewKey]: result };
+        const overflowKeys = Object.keys(next).slice(0, -MAX_PREVIEW_CACHE_ENTRIES);
+        for (const key of overflowKeys) {
+          if (next[key].url !== result.url) URL.revokeObjectURL(next[key].url);
+          delete next[key];
+        }
+        return next;
       });
       setPreview(result);
       setProgress({ current: 1, total: 1, label: source === "auto" ? "Auto preview updated" : "Preview complete" });
