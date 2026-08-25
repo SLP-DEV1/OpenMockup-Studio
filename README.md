@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/SLP-DEV1/OpenMockup-Studio/actions/workflows/ci.yml/badge.svg)](https://github.com/SLP-DEV1/OpenMockup-Studio/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js 20.19+](https://img.shields.io/badge/Node.js-20.19%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 
 OpenMockup Studio is a free, browser-based batch mockup tool for small shops, artists, print businesses, and marketplace sellers. Load one or more mockups, add multiple designs, adjust their placement visually, and export every combination as a ZIP file.
 
@@ -35,7 +35,7 @@ The app opens at [http://127.0.0.1:5173](http://127.0.0.1:5173). Keep the launch
 
 ### Developers
 
-Requirements: Node.js 20 or newer and npm 10 or newer.
+Requirements: Node.js 20.19 or newer and npm 10 or newer.
 
 ```bash
 git clone https://github.com/SLP-DEV1/OpenMockup-Studio.git
@@ -115,6 +115,8 @@ Public uploads are disabled by default. Enable them only when the deployment is 
 | `npm run dev:public` | Start with a temporary Cloudflare Tunnel |
 | `npm run typecheck` | Run TypeScript checks |
 | `npm run typecheck:strict` | Include unused-code checks |
+| `npm test` | Run the automated test suite once |
+| `npm run test:watch` | Re-run tests while files change |
 | `npm run build` | Type-check and create a production build |
 | `npm run preview` | Preview the production build |
 | `npm run clean` | Remove dependencies, builds, and local caches |
@@ -141,14 +143,17 @@ PSD batches run serially to keep the Photopea session stable.
 ## Project structure
 
 ```text
-src/components/       React interface components
+src/components/       Focused React interface components
+src/lib/app/          App-level mockup, persistence, and cache logic
 src/lib/config/       Product and export profiles
 src/lib/export/       Conversion, naming, ZIP, and download helpers
 src/lib/photopea/     Photopea bridge and rendering scripts
-src/lib/              Image rendering and PSD detection
+src/lib/              Image rendering, placement, and PSD detection
 scripts/              Local launcher and cleanup helpers
 docs/                 Documentation assets
 ```
+
+App-level browser logic lives outside the main React component where practical. Pure placement, naming, mockup, persistence, and cache behavior is covered by Vitest. GitHub Actions runs strict TypeScript checks, tests, and the production build for every pull request. Dependabot keeps npm and workflow dependencies visible through small, reviewable pull requests.
 
 ## Contributing
 
@@ -157,6 +162,7 @@ Issues and pull requests are welcome. Before submitting a change, run:
 ```bash
 npm ci
 npm run typecheck:strict
+npm test
 npm run build
 ```
 
@@ -164,11 +170,35 @@ Do not commit dependencies, build output, exports, private mockups, PSD files, o
 
 ## Roadmap
 
-- Four-point perspective transforms for flat image mockups
-- Better masking for PNG, JPG, and WebP mockups
-- More product profiles and placement defaults
-- Faster batch previews and improved PSD error recovery
-- Optional self-hosted asset service and authentication
+The roadmap is ordered by expected user value and the technical foundation each item needs.
+
+### Foundation
+
+- [x] Reproducible installs, strict type checks, automated tests, and CI
+- [x] Extract testable mockup, persistence, and preview-cache modules from `App.tsx`
+- [ ] Add component-level tests for file selection, presets, and batch cancellation
+- [ ] Add browser-based export smoke tests with small generated fixtures
+
+### Editing and realism
+
+- [ ] Four-point perspective transforms for flat image mockups
+- [ ] Reusable masks for PNG, JPG, and WebP mockups
+- [ ] Shadow, highlight, and blend-mode controls
+- [ ] Drag-and-drop design ordering and per-product placement defaults
+
+### Reliability and performance
+
+- [ ] Faster batch previews with controlled parallel image rendering
+- [ ] Better PSD timeout recovery and resumable batch exports
+- [ ] Export manifest import for retrying only failed combinations
+- [ ] Performance budgets for large batches and high-resolution files
+
+### Hosting and distribution
+
+- [ ] Authenticated self-hosted asset service with rate limits
+- [ ] Static image-mode demo deployment
+- [ ] Versioned releases, changelog automation, and a downloadable Windows package
+- [ ] Optional user accounts and shared presets for hosted deployments
 
 ## License
 

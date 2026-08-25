@@ -2,19 +2,41 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FileDrop } from "./components/FileDrop";
 import { PhotopeaFrame } from "./components/PhotopeaFrame";
 import { PreviewPane } from "./components/PreviewPane";
-import { SettingsPanel, shirtPlacementDefaults } from "./components/SettingsPanel";
+import { SettingsPanel } from "./components/SettingsPanel";
 import { VisualPlacementEditor } from "./components/VisualPlacementEditor";
-import { detectProductProfileIdFromMockupName, exportProfiles, findProductProfileById, isMugProductProfileId, productProfiles } from "./lib/config/profiles";
+import { exportProfiles, isMugProductProfileId, productProfiles } from "./lib/config/profiles";
+import {
+  analyseMockupAsset,
+  buildDesignWarnings,
+  defaultExportOptions,
+  defaultSettings,
+  detectMockupKind,
+  fallbackDocumentSize,
+  getImageModeSettings,
+  getLockedSmartSlotFromBounds,
+  makeAsset,
+  revokeAssetUrls,
+  revokeResultUrls,
+  type MockupKind,
+  type MockupMeta,
+} from "./lib/app/mockups";
+import {
+  DEFAULT_PRESET_ID,
+  loadStoredHistory,
+  loadStoredPresets,
+  loadStoredTheme,
+  saveStoredHistory,
+  saveStoredPresets,
+  saveStoredTheme,
+} from "./lib/app/persistence";
+import { updatePreviewCache } from "./lib/app/previewCache";
 import { convertExportBlob } from "./lib/export/convert";
 import { downloadZip, readPreset, renderFileName, savePreset } from "./lib/export/download";
 import { PhotopeaClient } from "./lib/photopea";
-import { detectSmartObjectNameFromPsd, type SmartObjectBounds, type SmartObjectCandidate } from "./lib/psdSmartObjectDetection";
 import { getImageDimensions } from "./lib/images";
 import { renderImageMockup } from "./lib/renderImageMockup";
 import type {
   BatchError,
-  DesignWarning,
-  DocumentSize,
   ExportOptions,
   ExportResult,
   LoadedAsset,
@@ -23,282 +45,6 @@ import type {
   RenderHistoryItem,
   SavedPreset,
 } from "./types";
-
-const PRESETS_STORAGE_KEY = "openmockup.presets.v2";
-const HISTORY_STORAGE_KEY = "openmockup.history.v1";
-const THEME_STORAGE_KEY = "openmockup.theme.v1";
-const DEFAULT_PRESET_ID = "tshirt-front-standard";
-const MAX_PREVIEW_CACHE_ENTRIES = 12;
-
-type MockupKind = "psd" | "image" | "unknown";
-
-const defaultSettings: MockupSettings = {
-  smartObjectName: "Auto-detect",
-  ...shirtPlacementDefaults,
-};
-
-const imagePlacementDefaults: Partial<MockupSettings> = {
-  smartObjectName: "Image Canvas",
-  left: 0,
-  top: 0,
-  width: 100,
-  height: 100,
-  areaLeftPercent: 0,
-  areaTopPercent: 0,
-  areaWidthPercent: 100,
-  areaHeightPercent: 100,
-  rotation: 0,
-  opacity: 100,
-  fitMode: "contain",
-  anchor: "center",
-};
-
-const defaultExportOptions: ExportOptions = {
-  filenameTemplate: "{index}-{mockup}-{design}.{ext}",
-  zipName: "openmockup-export.zip",
-  format: "png",
-  quality: 92,
-  backgroundColor: "#ffffff",
-  maxLongSide: 0,
-  cropPreset: "none",
-  watermarkText: "",
-  watermarkOpacity: 18,
-  watermarkPosition: "bottom-right",
-};
-
-function detectMockupKind(file?: File | null): MockupKind {
-  if (!file) return "unknown";
-  const name = file.name.toLowerCase();
-  if (name.endsWith(".psd")) return "psd";
-  if (file.type.startsWith("image/") || name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".webp")) return "image";
-  return "unknown";
-}
-
-async function readPsdDimensionsFromFile(file: File): Promise<DocumentSize | null> {
-  try {
-    const header = await file.slice(0, 26).arrayBuffer();
-    if (header.byteLength < 26) return null;
-    const view = new DataView(header);
-    const signature = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
-    const version = view.getUint16(4, false);
-    if (signature !== "8BPS" || (version !== 1 && version !== 2)) return null;
-    const height = view.getUint32(14, false);
-    const width = view.getUint32(18, false);
-    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
-    return { width, height };
-  } catch {
-    return null;
-  }
-}
-
-function makeAsset(file: File): LoadedAsset {
-  return {
-    id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
-    file,
-    url: URL.createObjectURL(file),
-  };
-}
-
-function loadStoredPresets(): SavedPreset[] {
-  const defaultPreset: SavedPreset = {
-    id: DEFAULT_PRESET_ID,
-    name: "T-Shirt Front Standard",
-    settings: defaultSettings,
-    updatedAt: Date.now(),
-  };
-
-  try {
-    const raw = window.localStorage.getItem(PRESETS_STORAGE_KEY);
-    if (!raw) return [defaultPreset];
-    const parsed = JSON.parse(raw) as SavedPreset[];
-    if (!Array.isArray(parsed)) return [defaultPreset];
-    const cleaned = parsed.filter((preset) => preset?.id && preset?.name && preset?.settings?.smartObjectName);
-    if (!cleaned.some((preset) => preset.id === DEFAULT_PRESET_ID)) cleaned.unshift(defaultPreset);
-    return cleaned.length ? cleaned : [defaultPreset];
-  } catch {
-    return [defaultPreset];
-  }
-}
-
-function saveStoredPresets(presets: SavedPreset[]): void {
-  try {
-    window.localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets));
-  } catch {
-    // Presets remain available for the current session when storage is unavailable.
-  }
-}
-
-function loadStoredHistory(): RenderHistoryItem[] {
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(HISTORY_STORAGE_KEY) || "[]") as RenderHistoryItem[];
-    return Array.isArray(parsed) ? parsed.slice(0, 12) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveStoredHistory(history: RenderHistoryItem[]): void {
-  try {
-    window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, 12)));
-  } catch {
-    // History remains available for the current session when storage is unavailable.
-  }
-}
-
-function loadStoredTheme(): "light" | "dark" {
-  try {
-    return window.localStorage.getItem(THEME_STORAGE_KEY) === "dark" ? "dark" : "light";
-  } catch {
-    return "light";
-  }
-}
-
-function buildDesignWarnings(dimensions: Record<string, { width: number; height: number }>, designs: LoadedAsset[]): DesignWarning[] {
-  const warnings: DesignWarning[] = [];
-  for (const design of designs) {
-    const dim = dimensions[design.id];
-    if (!dim) continue;
-    if (dim.width < 800 || dim.height < 800) {
-      warnings.push({ fileName: design.file.name, message: `Low resolution ${dim.width}×${dim.height}. Large mockups may look soft.` });
-    }
-    if (design.file.type === "image/jpeg" && design.file.size > 6_000_000) {
-      warnings.push({ fileName: design.file.name, message: "Large JPG file. PNG with transparency usually works better for print designs." });
-    }
-  }
-  return warnings;
-}
-
-function clampPercent(value: number, min: number, max: number): number {
-  if (!Number.isFinite(value)) return min;
-  return Math.max(min, Math.min(max, value));
-}
-
-function getLockedSmartSlotFromBounds(bounds: SmartObjectBounds | undefined, docSize: DocumentSize): Partial<MockupSettings> | null {
-  if (!bounds || docSize.width <= 0 || docSize.height <= 0) return null;
-  const areaLeftPercent = clampPercent((bounds.left / docSize.width) * 100, 0, 100);
-  const areaTopPercent = clampPercent((bounds.top / docSize.height) * 100, 0, 100);
-  const areaWidthPercent = clampPercent((bounds.width / docSize.width) * 100, 1, 100 - areaLeftPercent || 1);
-  const areaHeightPercent = clampPercent((bounds.height / docSize.height) * 100, 1, 100 - areaTopPercent || 1);
-  return {
-    areaLeftPercent: Number(areaLeftPercent.toFixed(2)),
-    areaTopPercent: Number(areaTopPercent.toFixed(2)),
-    areaWidthPercent: Number(areaWidthPercent.toFixed(2)),
-    areaHeightPercent: Number(areaHeightPercent.toFixed(2)),
-    left: 0,
-    top: 0,
-    width: 100,
-    height: 100,
-    anchor: "center",
-  };
-}
-
-function getImageModeSettings(autoProductProfile?: (typeof productProfiles)[number]): MockupSettings {
-  return {
-    ...defaultSettings,
-    ...(autoProductProfile?.settings ?? {}),
-    ...imagePlacementDefaults,
-    smartObjectName: autoProductProfile ? `${autoProductProfile.name} Image Area` : "Image Canvas",
-  };
-}
-
-interface MockupMeta {
-  kind: MockupKind;
-  documentSize: DocumentSize;
-  smartObjectCandidates: SmartObjectCandidate[];
-  smartObjectDetectionLabel: string;
-  productProfileId: string;
-  smartObjectBounds?: SmartObjectBounds;
-}
-
-const fallbackDocumentSize: DocumentSize = { width: 3000, height: 2000 };
-
-function revokeAssetUrls(assets: LoadedAsset[]): void {
-  assets.forEach((asset) => URL.revokeObjectURL(asset.url));
-}
-
-function revokeResultUrls(results: ExportResult[]): void {
-  results.forEach((result) => URL.revokeObjectURL(result.url));
-}
-
-function getProductProfileForMockup(file: File): (typeof productProfiles)[number] | undefined {
-  return findProductProfileById(detectProductProfileIdFromMockupName(file.name));
-}
-
-async function analyseMockupAsset(asset: LoadedAsset): Promise<{ meta: MockupMeta; settings: MockupSettings; status: string }> {
-  const file = asset.file;
-  const productProfile = getProductProfileForMockup(file);
-  const kind = detectMockupKind(file);
-
-  if (kind === "image") {
-    const documentSize = await getImageDimensions(file).catch(() => fallbackDocumentSize);
-    const settings = getImageModeSettings(productProfile);
-    return {
-      meta: {
-        kind,
-        documentSize,
-        smartObjectCandidates: [],
-        smartObjectBounds: undefined,
-        productProfileId: productProfile?.id || "tshirt-front",
-        smartObjectDetectionLabel: productProfile
-          ? `Image mockup mode active. ${productProfile.name} was auto-detected from the filename. The design is rendered directly on the PNG/JPG mockup.`
-          : "Image mockup mode active. No PSD SmartObject is needed. The design is rendered directly on the PNG/JPG mockup.",
-      },
-      settings,
-      status: productProfile
-        ? `Image mockup loaded: ${file.name} · profile ${productProfile.name} active`
-        : `Image mockup loaded: ${file.name}`,
-    };
-  }
-
-  if (kind === "psd") {
-    const documentSize = (await readPsdDimensionsFromFile(file)) || fallbackDocumentSize;
-    const detection = await detectSmartObjectNameFromPsd(file);
-    const lockedSlot = getLockedSmartSlotFromBounds(detection.selectedBounds, documentSize);
-    const settings: MockupSettings = {
-      ...(productProfile?.settings ?? defaultSettings),
-      ...(lockedSlot ?? {}),
-      smartObjectName: detection.detectedName,
-    };
-
-    const smartObjectDetectionLabel = detection.candidates.length
-      ? lockedSlot
-        ? `Auto-detected: ${detection.detectedName} · locked smart slot ${Math.round(detection.selectedBounds?.width || 0)}×${Math.round(detection.selectedBounds?.height || 0)} px`
-        : `Auto-detected: ${detection.detectedName} (${detection.reason})`
-      : `Auto-detect fallback: ${detection.reason}. The stable renderer will use Photopea's initially active layer.`;
-
-    return {
-      meta: {
-        kind,
-        documentSize,
-        smartObjectCandidates: detection.candidates,
-        smartObjectBounds: detection.selectedBounds,
-        productProfileId: productProfile?.id || "tshirt-front",
-        smartObjectDetectionLabel,
-      },
-      settings,
-      status: productProfile
-        ? isMugProductProfileId(productProfile.id)
-          ? `Auto product profile loaded: ${productProfile.name} · mug auto-center active`
-          : `Auto product profile loaded: ${productProfile.name}`
-        : lockedSlot
-          ? `SmartObject slot detected automatically: ${Math.round(detection.selectedBounds?.width || 0)}×${Math.round(detection.selectedBounds?.height || 0)} px.`
-          : `PSD mockup loaded: ${file.name}`,
-    };
-  }
-
-  return {
-    meta: {
-      kind: "unknown",
-      documentSize: fallbackDocumentSize,
-      smartObjectCandidates: [],
-      smartObjectBounds: undefined,
-      productProfileId: productProfile?.id || "tshirt-front",
-      smartObjectDetectionLabel: "Unsupported mockup type. Use PSD, PNG, JPG or WebP.",
-    },
-    settings: productProfile?.settings ?? defaultSettings,
-    status: `Unsupported mockup type: ${file.name}`,
-  };
-}
 
 export default function App() {
   const photopeaClientRef = useRef<PhotopeaClient | null>(null);
@@ -323,7 +69,7 @@ export default function App() {
   const [designDimensions, setDesignDimensions] = useState<Record<string, { width: number; height: number }>>({});
   const [settings, setSettings] = useState<MockupSettings>(defaultSettings);
   const [exportOptions, setExportOptions] = useState<ExportOptions>(defaultExportOptions);
-  const [presets, setPresets] = useState<SavedPreset[]>(() => loadStoredPresets());
+  const [presets, setPresets] = useState<SavedPreset[]>(() => loadStoredPresets(defaultSettings));
   const [activePresetId, setActivePresetId] = useState(DEFAULT_PRESET_ID);
   const [preview, setPreview] = useState<ExportResult | undefined>();
   const [previewCache, setPreviewCache] = useState<Record<string, ExportResult>>({});
@@ -449,7 +195,7 @@ export default function App() {
   useEffect(() => { saveStoredHistory(history); }, [history]);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    try { window.localStorage.setItem(THEME_STORAGE_KEY, theme); } catch {}
+    saveStoredTheme(theme);
   }, [theme]);
 
   useEffect(() => {
@@ -669,15 +415,10 @@ export default function App() {
     try {
       const result = await renderOne(activeMockup, activeDesign, 0, activePreset?.name, settings);
       setPreviewCache((current) => {
-        const oldResult = current[previewKey];
-        if (oldResult && oldResult.url !== result.url) URL.revokeObjectURL(oldResult.url);
-        const next = { ...current, [previewKey]: result };
-        const overflowKeys = Object.keys(next).slice(0, -MAX_PREVIEW_CACHE_ENTRIES);
-        for (const key of overflowKeys) {
-          if (next[key].url !== result.url) URL.revokeObjectURL(next[key].url);
-          delete next[key];
-        }
-        return next;
+        const update = updatePreviewCache(current, previewKey, result);
+        if (update.replaced && update.replaced.url !== result.url) URL.revokeObjectURL(update.replaced.url);
+        revokeResultUrls(update.evicted.filter((item) => item.url !== result.url));
+        return update.cache;
       });
       setPreview(result);
       setProgress({ current: 1, total: 1, label: source === "auto" ? "Auto preview updated" : "Preview complete" });
