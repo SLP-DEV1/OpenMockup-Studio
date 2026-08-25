@@ -11,6 +11,8 @@ type StoredDesign = {
 
 const DESIGN_TTL_MS = Number(process.env.OPENMOCKUP_DESIGN_TTL_MS ?? 30 * 60 * 1000);
 const MAX_DESIGN_BYTES = Math.max(1, Number(process.env.OPENMOCKUP_MAX_DESIGN_MB ?? 50)) * 1024 * 1024;
+const ALLOW_PUBLIC_UPLOADS = process.env.OPENMOCKUP_ALLOW_PUBLIC_UPLOADS === "1";
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 
 function normalizePublicBaseUrl(value: string | undefined): string | null {
   if (!value) return null;
@@ -21,6 +23,27 @@ function extensionForContentType(contentType: string): string {
   if (contentType.includes("jpeg") || contentType.includes("jpg")) return ".jpg";
   if (contentType.includes("webp")) return ".webp";
   return ".png";
+}
+
+function isLoopbackHostname(value: string): boolean {
+  try {
+    return LOOPBACK_HOSTS.has(new URL(`http://${value}`).hostname);
+  } catch {
+    return false;
+  }
+}
+
+function acceptsUpload(req: IncomingMessage): boolean {
+  if (ALLOW_PUBLIC_UPLOADS) return true;
+  const host = req.headers.host ?? "";
+  const origin = req.headers.origin;
+  if (!isLoopbackHostname(host)) return false;
+  if (!origin) return true;
+  try {
+    return LOOPBACK_HOSTS.has(new URL(origin).hostname);
+  } catch {
+    return false;
+  }
 }
 
 function openMockupDesignServer(): Plugin {
@@ -59,6 +82,12 @@ function openMockupDesignServer(): Plugin {
     }
 
     if (method === "POST") {
+      if (!acceptsUpload(req)) {
+        res.statusCode = 403;
+        res.end("Design uploads are restricted to the local app.");
+        return;
+      }
+
       const chunks: Buffer[] = [];
       let receivedBytes = 0;
       let tooLarge = false;
