@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-cd /d "%~dp0\..\.."
+cd /d "%~dp0"
 title OpenMockup Studio - Portable PSD Mode
 
 set "NODE_EXE=%CD%\runtime\node.exe"
