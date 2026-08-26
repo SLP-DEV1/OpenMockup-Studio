@@ -1,6 +1,7 @@
 import type { DocumentSize, MockupSettings, SavedPreset } from "../types";
 import type { SmartObjectBounds, SmartObjectCandidate } from "../lib/psdSmartObjectDetection";
 import { shirtPlacementDefaults } from "../lib/config/defaults";
+import { PerspectiveControls } from "./PerspectiveControls";
 
 interface SettingsPanelProps {
   settings: MockupSettings;
@@ -149,35 +150,43 @@ export function SettingsPanel({
         </div>
       </section>
 
+      <PerspectiveControls settings={settings} onChange={onChange} mode={mode} />
+
       <section className="compact-panel">
         <div className="section-title-row">
           <h3>Design Transform</h3>
-          <span className="tiny-status">Editable</span>
+          <span className="tiny-status">{settings.perspective?.enabled && isImageMode ? "Paused by perspective" : "Editable"}</span>
         </div>
 
-        <div className="slider-group slider-group--stacked">
-          <SliderField label="Horizontal Offset" suffix="%" min={-150} max={150} value={settings.left} onChange={(left) => patch({ left })} />
-          <SliderField label="Vertical Offset" suffix="%" min={-150} max={150} value={settings.top} onChange={(top) => patch({ top })} />
-          <SliderField label="Scale" suffix="%" min={1} max={250} value={uniformScale} onChange={setUniformScale} />
-          <SliderField label="Rotation" suffix="°" min={-180} max={180} value={settings.rotation} onChange={(rotation) => patch({ rotation })} />
-          <SliderField label="Opacity" suffix="%" min={0} max={100} value={settings.opacity} onChange={(opacity) => patch({ opacity })} />
-        </div>
+        {settings.perspective?.enabled && isImageMode ? (
+          <p className="hint-text">Disable 4-Corner Perspective to use move, scale, rotation and fit controls again.</p>
+        ) : (
+          <>
+            <div className="slider-group slider-group--stacked">
+              <SliderField label="Horizontal Offset" suffix="%" min={-150} max={150} value={settings.left} onChange={(left) => patch({ left })} />
+              <SliderField label="Vertical Offset" suffix="%" min={-150} max={150} value={settings.top} onChange={(top) => patch({ top })} />
+              <SliderField label="Scale" suffix="%" min={1} max={250} value={uniformScale} onChange={setUniformScale} />
+              <SliderField label="Rotation" suffix="°" min={-180} max={180} value={settings.rotation} onChange={(rotation) => patch({ rotation })} />
+              <SliderField label="Opacity" suffix="%" min={0} max={100} value={settings.opacity} onChange={(opacity) => patch({ opacity })} />
+            </div>
 
-        <div className="segmented-group">
-          <span>Fit Mode</span>
-          <div className="segmented segmented--wide">
-            {fitModes.map((mode) => (
-              <button
-                className={settings.fitMode === mode.id ? "is-active" : ""}
-                key={mode.id}
-                type="button"
-                onClick={() => patch({ fitMode: mode.id })}
-              >
-                {mode.label}
-              </button>
-            ))}
-          </div>
-        </div>
+            <div className="segmented-group">
+              <span>Fit Mode</span>
+              <div className="segmented segmented--wide">
+                {fitModes.map((fitMode) => (
+                  <button
+                    className={settings.fitMode === fitMode.id ? "is-active" : ""}
+                    key={fitMode.id}
+                    type="button"
+                    onClick={() => patch({ fitMode: fitMode.id })}
+                  >
+                    {fitMode.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </section>
 
       <details className="details-card">
