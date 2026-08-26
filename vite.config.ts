@@ -19,6 +19,12 @@ function normalizePublicBaseUrl(value: string | undefined): string | null {
   return value.replace(/\/+$/, "");
 }
 
+function normalizeBasePath(value: string | undefined): string {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed || trimmed === "/") return "/";
+  return `/${trimmed.replace(/^\/+|\/+$/g, "")}/`;
+}
+
 function extensionForContentType(contentType: string): string {
   if (contentType.includes("jpeg") || contentType.includes("jpg")) return ".jpg";
   if (contentType.includes("webp")) return ".webp";
@@ -162,9 +168,16 @@ function openMockupDesignServer(): Plugin {
   };
 }
 
-export default defineConfig({
-  server: {
-    allowedHosts: [".trycloudflare.com"],
-  },
-  plugins: [react(), openMockupDesignServer()],
+export default defineConfig(({ mode }) => {
+  const isStaticDemo = mode === "demo";
+
+  return {
+    base: isStaticDemo
+      ? normalizeBasePath(process.env.OPENMOCKUP_BASE_PATH ?? "/OpenMockup-Studio/")
+      : "/",
+    server: {
+      allowedHosts: [".trycloudflare.com"],
+    },
+    plugins: isStaticDemo ? [react()] : [react(), openMockupDesignServer()],
+  };
 });
