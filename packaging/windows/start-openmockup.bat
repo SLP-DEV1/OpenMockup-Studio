@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-cd /d "%~dp0\..\.."
+cd /d "%~dp0"
 title OpenMockup Studio - Portable Image Mode
 
 set "APP_PORT=5173"
