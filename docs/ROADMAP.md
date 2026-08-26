@@ -11,7 +11,7 @@ The roadmap is ordered by expected user value and by the technical foundation ea
 
 ## Editing and realism
 
-- [ ] Four-point perspective transforms for flat image mockups
+- [x] Four-point perspective transforms for flat image mockups
 - [ ] Reusable masks for PNG, JPG, and WebP mockups
 - [ ] Shadow, highlight, and blend-mode controls
 - [ ] Drag-and-drop design ordering and per-product placement defaults
@@ -27,7 +27,7 @@ The roadmap is ordered by expected user value and by the technical foundation ea
 
 - [ ] Authenticated self-hosted asset service with rate limits
 - [x] Static image-mode demo deployment via GitHub Pages
-- [ ] Versioned releases and downloadable Windows packages
+- [x] Versioned releases and downloadable Windows packages
 - [ ] Optional shared presets for hosted deployments
 
 ## Want to help?
