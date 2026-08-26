@@ -26,7 +26,7 @@ The roadmap is ordered by expected user value and by the technical foundation ea
 ## Hosting and distribution
 
 - [ ] Authenticated self-hosted asset service with rate limits
-- [ ] Static image-mode demo deployment
+- [x] Static image-mode demo deployment via GitHub Pages
 - [ ] Versioned releases and downloadable Windows packages
 - [ ] Optional shared presets for hosted deployments
 
