@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows-portable:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify project
+        run: npm run check
+
+      - name: Verify tag matches package version
+        shell: pwsh
+        run: |
+          $package = Get-Content package.json -Raw | ConvertFrom-Json
+          $expectedTag = "v$($package.version)"
+          if ($env:GITHUB_REF_NAME -ne $expectedTag) {
+            throw "Release tag $env:GITHUB_REF_NAME does not match package.json version $expectedTag"
+          }
+
+      - name: Assemble portable Windows package
+        shell: pwsh
+        run: |
+          $packageName = "OpenMockup-Studio-Windows-x64"
+          $stageRoot = Join-Path $env:RUNNER_TEMP $packageName
+          Remove-Item $stageRoot -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $stageRoot | Out-Null
+          New-Item -ItemType Directory -Path (Join-Path $stageRoot "runtime") | Out-Null
+          New-Item -ItemType Directory -Path (Join-Path $stageRoot "tools") | Out-Null
+
+          foreach ($directory in @("src", "public", "scripts")) {
+            Copy-Item $directory (Join-Path $stageRoot $directory) -Recurse
+          }
+
+          robocopy node_modules (Join-Path $stageRoot "node_modules") /E /NFL /NDL /NJH /NJS /NP
+          if ($LASTEXITCODE -gt 7) { throw "robocopy node_modules failed with exit code $LASTEXITCODE" }
+          $global:LASTEXITCODE = 0
+
+          foreach ($file in @(
+            "index.html",
+            "package.json",
+            "package-lock.json",
+            "tsconfig.json",
+            "vite.config.ts",
+            ".env.example",
+            "README.md",
+            "LICENSE",
+            "stop.bat"
+          )) {
+            Copy-Item $file (Join-Path $stageRoot $file)
+          }
+
+          Copy-Item (Get-Command node).Source (Join-Path $stageRoot "runtime\node.exe")
+          Copy-Item "packaging\windows\start-openmockup.bat" (Join-Path $stageRoot "start-openmockup.bat")
+          Copy-Item "packaging\windows\start-openmockup-psd.bat" (Join-Path $stageRoot "start-openmockup-psd.bat")
+          Copy-Item "packaging\windows\README.txt" (Join-Path $stageRoot "README-PORTABLE.txt")
+
+          Invoke-WebRequest `
+            -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" `
+            -OutFile (Join-Path $stageRoot "tools\cloudflared.exe")
+
+          $zipPath = Join-Path $env:GITHUB_WORKSPACE "$packageName.zip"
+          Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+          tar.exe -a -c -f $zipPath -C $env:RUNNER_TEMP $packageName
+          if ($LASTEXITCODE -ne 0) { throw "Creating release ZIP failed with exit code $LASTEXITCODE" }
+
+          $hash = (Get-FileHash $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          $checksumPath = Join-Path $env:GITHUB_WORKSPACE "$packageName.zip.sha256"
+          "$hash  $packageName.zip" | Set-Content $checksumPath -Encoding ascii
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:GITHUB_REF_NAME `
+            "OpenMockup-Studio-Windows-x64.zip" `
+            "OpenMockup-Studio-Windows-x64.zip.sha256" `
+            --repo $env:GITHUB_REPOSITORY `
+            --title "OpenMockup Studio $env:GITHUB_REF_NAME" `
+            --generate-notes `
+            --verify-tag
