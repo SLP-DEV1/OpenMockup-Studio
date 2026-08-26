@@ -3,6 +3,7 @@ import App from "./App";
 import { DemoBanner } from "./components/DemoBanner";
 import "./styles.css";
 import "./coverClip.css";
+import "./perspective.css";
 
 const isStaticDemo = import.meta.env.MODE === "demo";
 

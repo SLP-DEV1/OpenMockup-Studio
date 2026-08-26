@@ -7,6 +7,23 @@ export type Anchor =
   | "bottom-left"
   | "bottom-right";
 
+export interface PerspectivePoint {
+  x: number;
+  y: number;
+}
+
+export interface PerspectiveCorners {
+  topLeft: PerspectivePoint;
+  topRight: PerspectivePoint;
+  bottomRight: PerspectivePoint;
+  bottomLeft: PerspectivePoint;
+}
+
+export interface PerspectiveSettings {
+  enabled: boolean;
+  corners: PerspectiveCorners;
+}
+
 export type ExportFormat = "png" | "jpg" | "webp";
 export type CropPreset = "none" | "square" | "portrait45" | "pinterest23" | "story916";
 export type WatermarkPosition = "bottom-right" | "bottom-left" | "top-right" | "top-left" | "center";
@@ -46,6 +63,7 @@ export interface MockupSettings {
   opacity: number;
   fitMode: FitMode;
   anchor: Anchor;
+  perspective?: PerspectiveSettings;
 }
 
 export interface SavedPreset {

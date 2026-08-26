@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { DocumentSize, LoadedAsset, MockupSettings } from "../types";
+import type { DocumentSize, LoadedAsset, MockupSettings, PerspectiveCorners } from "../types";
 import { angleFrom, clamp, computePlacementMetrics, normalizeAngle } from "../lib/renderPlacement";
+import {
+  clampPerspectivePoint,
+  drawPerspectiveImage,
+  isValidPerspectiveCorners,
+  type PerspectiveCornerName,
+} from "../lib/perspective";
 
 interface VisualPlacementEditorProps {
   documentSize: DocumentSize;
@@ -12,7 +18,7 @@ interface VisualPlacementEditorProps {
   mode?: "psd" | "image";
 }
 
-type DragMode = "design-move" | "design-scale" | "design-rotate" | null;
+type DragMode = "design-move" | "design-scale" | "design-rotate" | "perspective" | null;
 
 interface DragState {
   mode: DragMode;
@@ -27,10 +33,19 @@ interface DragState {
   startScaleHeight?: number;
   displayWidth?: number;
   displayHeight?: number;
+  perspectiveCorner?: PerspectiveCornerName;
 }
+
+const perspectiveLabels: Record<PerspectiveCornerName, string> = {
+  topLeft: "Top left",
+  topRight: "Top right",
+  bottomRight: "Bottom right",
+  bottomLeft: "Bottom left",
+};
 
 export function VisualPlacementEditor({ documentSize, design, mockup, settings, onChange, disabled, mode = "psd" }: VisualPlacementEditorProps) {
   const ref = useRef<HTMLDivElement | null>(null);
+  const perspectiveCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [showGuides, setShowGuides] = useState(true);
   const [designSize, setDesignSize] = useState<{ width: number; height: number } | null>(null);
@@ -47,11 +62,35 @@ export function VisualPlacementEditor({ documentSize, design, mockup, settings, 
   }, [design]);
 
   const aspect = documentSize.width > 0 && documentSize.height > 0 ? documentSize.width / documentSize.height : 1.5;
-
   const metrics = useMemo(() => computePlacementMetrics(settings, designSize), [designSize, settings]);
-  const usesCoverClip = mode === "image" && settings.fitMode === "cover" && Boolean(design);
+  const usesPerspective = mode === "image" && Boolean(settings.perspective?.enabled && design);
+  const usesCoverClip = !usesPerspective && mode === "image" && settings.fitMode === "cover" && Boolean(design);
   const targetWidth = Math.max(0.001, metrics.targetWidth);
   const targetHeight = Math.max(0.001, metrics.targetHeight);
+
+  useEffect(() => {
+    const canvas = perspectiveCanvasRef.current;
+    const corners = settings.perspective?.corners;
+    if (!canvas || !usesPerspective || !design || !corners) return;
+
+    const width = Math.max(1, Math.round(documentSize.width || 1200));
+    const height = Math.max(1, Math.round(documentSize.height || 800));
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, width, height);
+
+    const image = new Image();
+    image.onload = () => {
+      ctx.clearRect(0, 0, width, height);
+      ctx.save();
+      ctx.globalAlpha = clamp(settings.opacity, 0, 100) / 100;
+      drawPerspectiveImage(ctx, image, corners, width, height);
+      ctx.restore();
+    };
+    image.src = design.url;
+  }, [design, documentSize.height, documentSize.width, settings.opacity, settings.perspective, usesPerspective]);
 
   function pointerPercent(event: React.PointerEvent): { x: number; y: number } | null {
     const element = ref.current;
@@ -63,7 +102,7 @@ export function VisualPlacementEditor({ documentSize, design, mockup, settings, 
     };
   }
 
-  function beginDrag(event: React.PointerEvent, dragMode: DragMode): void {
+  function beginDrag(event: React.PointerEvent, dragMode: DragMode, perspectiveCorner?: PerspectiveCornerName): void {
     if (disabled || !dragMode) return;
     event.preventDefault();
     event.stopPropagation();
@@ -76,6 +115,7 @@ export function VisualPlacementEditor({ documentSize, design, mockup, settings, 
       startX: point.x,
       startY: point.y,
       initial: { ...settings },
+      perspectiveCorner,
     };
 
     if (dragMode === "design-rotate") {
@@ -97,10 +137,26 @@ export function VisualPlacementEditor({ documentSize, design, mockup, settings, 
     setDrag(next);
   }
 
+  function updatePerspectiveCorner(point: { x: number; y: number }, corner: PerspectiveCornerName): void {
+    const perspective = settings.perspective;
+    if (!perspective?.enabled) return;
+    const nextCorners: PerspectiveCorners = {
+      ...perspective.corners,
+      [corner]: clampPerspectivePoint(point),
+    };
+    if (!isValidPerspectiveCorners(nextCorners)) return;
+    onChange({ ...settings, perspective: { enabled: true, corners: nextCorners } });
+  }
+
   function updateDrag(event: React.PointerEvent): void {
     if (!drag || disabled) return;
     const point = pointerPercent(event);
     if (!point) return;
+
+    if (drag.mode === "perspective" && drag.perspectiveCorner) {
+      updatePerspectiveCorner(point, drag.perspectiveCorner);
+      return;
+    }
 
     const dx = point.x - drag.startX;
     const dy = point.y - drag.startY;
@@ -137,10 +193,13 @@ export function VisualPlacementEditor({ documentSize, design, mockup, settings, 
   }
 
   const slotLabel = mode === "image" ? "Placement Area" : "SmartObject Slot";
-  const panelTitle = mode === "image" ? "Image Mockup Editor" : "SmartObject Editor";
-  const panelDescription = mode === "image"
-    ? "The mockup image stays fixed. Drag, scale and rotate only the uploaded design."
-    : "The SmartObject slot is fixed. Drag, scale and rotate only the uploaded design.";
+  const panelTitle = usesPerspective ? "Perspective Editor" : mode === "image" ? "Image Mockup Editor" : "SmartObject Editor";
+  const panelDescription = usesPerspective
+    ? "Drag the four corner handles to match the surface perspective. The batch export uses the same transform."
+    : mode === "image"
+      ? "The mockup image stays fixed. Drag, scale and rotate only the uploaded design."
+      : "The SmartObject slot is fixed. Drag, scale and rotate only the uploaded design.";
+  const perspectiveCorners = settings.perspective?.corners;
 
   return (
     <section className="live-editor-panel live-editor-panel--mockcity">
@@ -168,17 +227,44 @@ export function VisualPlacementEditor({ documentSize, design, mockup, settings, 
           {documentSize.width}×{documentSize.height}
         </div>
 
-        <div
-          className="live-editor__slot"
-          style={{
-            left: `${metrics.areaLeft}%`,
-            top: `${metrics.areaTop}%`,
-            width: `${metrics.areaWidth}%`,
-            height: `${metrics.areaHeight}%`,
-          }}
-        >
-          <span>{slotLabel}</span>
-        </div>
+        {!usesPerspective ? (
+          <div
+            className="live-editor__slot"
+            style={{
+              left: `${metrics.areaLeft}%`,
+              top: `${metrics.areaTop}%`,
+              width: `${metrics.areaWidth}%`,
+              height: `${metrics.areaHeight}%`,
+            }}
+          >
+            <span>{slotLabel}</span>
+          </div>
+        ) : null}
+
+        {usesPerspective && perspectiveCorners ? (
+          <>
+            <canvas ref={perspectiveCanvasRef} className="live-editor__perspective-canvas" aria-hidden="true" />
+            <svg className="live-editor__perspective-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <polygon
+                points={`${perspectiveCorners.topLeft.x},${perspectiveCorners.topLeft.y} ${perspectiveCorners.topRight.x},${perspectiveCorners.topRight.y} ${perspectiveCorners.bottomRight.x},${perspectiveCorners.bottomRight.y} ${perspectiveCorners.bottomLeft.x},${perspectiveCorners.bottomLeft.y}`}
+              />
+            </svg>
+            {(Object.keys(perspectiveLabels) as PerspectiveCornerName[]).map((corner) => {
+              const point = perspectiveCorners[corner];
+              return (
+                <button
+                  key={corner}
+                  type="button"
+                  className="live-editor__perspective-handle"
+                  style={{ left: `${point.x}%`, top: `${point.y}%` }}
+                  onPointerDown={(event) => beginDrag(event, "perspective", corner)}
+                  title={`Drag ${perspectiveLabels[corner]} perspective corner`}
+                  aria-label={`Drag ${perspectiveLabels[corner]} perspective corner`}
+                />
+              );
+            })}
+          </>
+        ) : null}
 
         {usesCoverClip && design ? (
           <div
@@ -206,50 +292,54 @@ export function VisualPlacementEditor({ documentSize, design, mockup, settings, 
           </div>
         ) : null}
 
-        <div
-          className="live-editor__design-box live-editor__design-box--mockcity"
-          style={{
-            left: `${metrics.displayLeft}%`,
-            top: `${metrics.displayTop}%`,
-            width: `${metrics.displayWidth}%`,
-            height: `${metrics.displayHeight}%`,
-            opacity: usesCoverClip ? 1 : clamp(settings.opacity, 0, 100) / 100,
-            transform: `rotate(${settings.rotation}deg)`,
-          }}
-          onPointerDown={(event) => beginDrag(event, "design-move")}
-          title="Drag design"
-        >
-          {design && !usesCoverClip ? (
-            <img
-              src={design.url}
-              alt={design.file.name}
-              style={{ objectFit: settings.fitMode === "cover" ? "cover" : "contain" }}
-            />
-          ) : !design ? (
-            <span>No design</span>
-          ) : null}
-
-          <button
-            type="button"
-            className="live-editor__rotate-handle"
-            onPointerDown={(event) => beginDrag(event, "design-rotate")}
-            title="Rotate design"
+        {!usesPerspective ? (
+          <div
+            className="live-editor__design-box live-editor__design-box--mockcity"
+            style={{
+              left: `${metrics.displayLeft}%`,
+              top: `${metrics.displayTop}%`,
+              width: `${metrics.displayWidth}%`,
+              height: `${metrics.displayHeight}%`,
+              opacity: usesCoverClip ? 1 : clamp(settings.opacity, 0, 100) / 100,
+              transform: `rotate(${settings.rotation}deg)`,
+            }}
+            onPointerDown={(event) => beginDrag(event, "design-move")}
+            title="Drag design"
           >
-            ↻
-          </button>
-          <button
-            type="button"
-            className="live-editor__scale-handle"
-            onPointerDown={(event) => beginDrag(event, "design-scale")}
-            title="Scale design"
-          />
-        </div>
+            {design && !usesCoverClip ? (
+              <img
+                src={design.url}
+                alt={design.file.name}
+                style={{ objectFit: settings.fitMode === "cover" ? "cover" : "contain" }}
+              />
+            ) : !design ? (
+              <span>No design</span>
+            ) : null}
+
+            <button
+              type="button"
+              className="live-editor__rotate-handle"
+              onPointerDown={(event) => beginDrag(event, "design-rotate")}
+              title="Rotate design"
+            >
+              ↻
+            </button>
+            <button
+              type="button"
+              className="live-editor__scale-handle"
+              onPointerDown={(event) => beginDrag(event, "design-scale")}
+              title="Scale design"
+            />
+          </div>
+        ) : null}
       </div>
 
       <div className="editor-meta-row">
-        <span className="tiny-status">{mode === "image" ? "Image mode" : "Locked slot"}</span>
+        <span className="tiny-status">{usesPerspective ? "4-corner perspective" : mode === "image" ? "Image mode" : "Locked slot"}</span>
         <span className="muted small-text">
-          {slotLabel} {Math.round(metrics.areaWidth)}% × {Math.round(metrics.areaHeight)}% · Design {Math.round(metrics.displayWidth)}% × {Math.round(metrics.displayHeight)}%
+          {usesPerspective
+            ? "Drag each teal corner · invalid/self-crossing shapes are blocked"
+            : `${slotLabel} ${Math.round(metrics.areaWidth)}% × ${Math.round(metrics.areaHeight)}% · Design ${Math.round(metrics.displayWidth)}% × ${Math.round(metrics.displayHeight)}%`}
         </span>
       </div>
     </section>
