@@ -4,6 +4,7 @@ import { PhotopeaFrame } from "./components/PhotopeaFrame";
 import { PreviewPane } from "./components/PreviewPane";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { VisualPlacementEditor } from "./components/VisualPlacementEditor";
+import { buildAutoPreviewKey } from "./lib/app/autoPreviewKey";
 import { exportProfiles, isMugProductProfileId, productProfiles } from "./lib/config/profiles";
 import {
   analyseMockupAsset,
@@ -145,13 +146,14 @@ export default function App() {
   );
 
   const currentAutoPreviewKey = useMemo(
-    () => JSON.stringify({
+    () => buildAutoPreviewKey({
       mockupId: activeMockup?.id || "",
+      designId: activeDesign?.id || "",
       mockupKind: activeMockupKind,
       settings,
       exportView: exportViewFingerprint,
     }),
-    [activeMockup?.id, activeMockupKind, settings, exportViewFingerprint],
+    [activeMockup?.id, activeDesign?.id, activeMockupKind, settings, exportViewFingerprint],
   );
 
   const handlePhotopeaFrame = useCallback((iframe: HTMLIFrameElement | null) => {
@@ -343,6 +345,9 @@ export default function App() {
     if (cachedPreview) {
       setPreview(cachedPreview);
       setStatus(`Active design: ${design.file.name} · cached preview shown.`);
+    } else if (autoPreview) {
+      setPreview(undefined);
+      setStatus(`Active design: ${design.file.name} · Auto Preview updating...`);
     } else {
       setStatus(`Active design: ${design.file.name} · preview kept until you move/scale it or click Refresh Preview.`);
     }
