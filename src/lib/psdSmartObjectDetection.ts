@@ -1,3 +1,5 @@
+import { readAdditionalInfoLength } from "./psbAdditionalInfoLength";
+
 export interface SmartObjectBounds {
   left: number;
   top: number;
@@ -216,8 +218,10 @@ export async function detectSmartObjectNameFromPsd(file: File): Promise<SmartObj
         const key = readAscii(view, offset + 4, 4);
         offset += 8;
         if (sig !== "8BIM" && sig !== "8B64") break;
-        const dataLength = isPsb ? readUint64AsNumber(view, offset) : view.getUint32(offset, false);
-        offset += isPsb ? 8 : 4;
+
+        const lengthInfo = readAdditionalInfoLength(view, offset, isPsb, key);
+        const dataLength = lengthInfo.length;
+        offset += lengthInfo.bytesRead;
         const dataStart = offset;
         const dataEnd = Math.min(extraEnd, dataStart + dataLength);
 
