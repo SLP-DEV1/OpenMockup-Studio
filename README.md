@@ -3,11 +3,16 @@
 > **Open-source batch mockup generator for product sellers and creators.** Combine many designs with many mockups, adjust placement visually, and export every result as a ZIP.
 
 [![CI](https://github.com/SLP-DEV1/OpenMockup-Studio/actions/workflows/ci.yml/badge.svg)](https://github.com/SLP-DEV1/OpenMockup-Studio/actions/workflows/ci.yml)
+[![Demo](https://img.shields.io/badge/Try%20the%20demo-GitHub%20Pages-222222?logo=github)](https://slp-dev1.github.io/OpenMockup-Studio/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js 20.19+](https://img.shields.io/badge/Node.js-20.19%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Made with React](https://img.shields.io/badge/React-TypeScript-61DAFB?logo=react&logoColor=white)](https://react.dev/)
 
 **Free · local-first · no account · no subscription**
+
+### [▶ Try OpenMockup Studio in your browser](https://slp-dev1.github.io/OpenMockup-Studio/)
+
+The public demo needs no installation and supports PNG, JPG, and WebP mockups. Files stay in the browser. PSD Smart Objects require the local version because that workflow uses Photopea and a temporary asset endpoint.
 
 ![OpenMockup Studio interface](docs/screenshot.png)
 
@@ -27,7 +32,13 @@ OpenMockup Studio is built for Etsy, WooCommerce, marketplace sellers, artists, 
 
 ## Quick start
 
-### Windows: easiest route
+### Zero-install browser demo
+
+Open the [GitHub Pages demo](https://slp-dev1.github.io/OpenMockup-Studio/) and add a PNG, JPG, or WebP mockup plus one or more designs. Preview and batch export work directly in the browser.
+
+The demo intentionally disables PSD uploads. Use the local version below for PSD Smart Objects.
+
+### Windows: full local version
 
 1. [Download the repository as a ZIP](https://github.com/SLP-DEV1/OpenMockup-Studio/archive/refs/heads/main.zip) and extract it.
 2. Install [Node.js 20.19+](https://nodejs.org/).
@@ -75,10 +86,13 @@ npm run dev:public
 | Public asset URL needed | No | Yes |
 | Batch ZIP export | Yes | Yes |
 | Account required | No | No |
+| Public demo | Yes | No |
 
 ### Privacy note
 
-Flat image rendering stays in the browser. PSD mode is different: Photopea must be able to download the selected design from a public HTTPS address. `start.bat` / `npm run dev:public` creates a temporary Cloudflare Tunnel for that asset flow.
+Flat image rendering stays in the browser. That includes the public GitHub Pages demo: there is no upload backend in the static demo build.
+
+PSD mode is different: Photopea must be able to download the selected design from a public HTTPS address. `start.bat` / `npm run dev:public` creates a temporary Cloudflare Tunnel for that asset flow.
 
 Do not use PSD mode for confidential assets unless you understand and accept this data flow. OpenMockup Studio is not affiliated with Photopea.
 
@@ -93,13 +107,16 @@ Do not use PSD mode for confidential assets unless you understand and accept thi
 | `npm run typecheck:strict` | Include unused-code checks |
 | `npm test` | Run the automated test suite once |
 | `npm run build` | Type-check and create a production build |
+| `npm run build:demo` | Build the flat-image-only static demo |
 | `npm run check` | Run strict typecheck, tests, and production build |
 | `npm run preview` | Preview the production build |
 | `npm run clean` | Remove dependencies, builds, and local caches |
 
 ## Hosting
 
-Flat image mode can be hosted as a static Vite build. PSD mode additionally needs the temporary-design endpoint used by the Photopea bridge.
+Flat image mode can be hosted as a static Vite build. The repository includes a GitHub Pages workflow that builds in `demo` mode, uses the repository subpath as Vite's base path, omits the temporary PSD design-server plugin, and deploys `dist/` as a Pages artifact.
+
+PSD mode additionally needs the temporary-design endpoint used by the Photopea bridge.
 
 For a server deployment:
 
@@ -123,7 +140,7 @@ PSD batches run serially to keep the Photopea session stable.
 
 ## Project health
 
-The repository uses strict TypeScript checks, Vitest, production builds in GitHub Actions, and Dependabot. Core placement, naming, mockup, persistence, cache, and export behavior has automated coverage.
+The repository uses strict TypeScript checks, Vitest, production and demo builds in GitHub Actions, and Dependabot. Core placement, naming, mockup, persistence, cache, and export behavior has automated coverage.
 
 - [Roadmap](docs/ROADMAP.md)
 - [Architecture](docs/ARCHITECTURE.md)
@@ -138,6 +155,7 @@ Bug reports, feature ideas, documentation improvements, and pull requests are we
 ```bash
 npm ci
 npm run check
+npm run build:demo
 ```
 
 ## License

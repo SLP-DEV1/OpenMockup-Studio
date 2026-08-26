@@ -31,3 +31,6 @@ jobs:
 
       - name: Check
         run: npm run check
+
+      - name: Build static demo
+        run: npm run build:demo
