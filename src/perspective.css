@@ -1,0 +1,43 @@
+.live-editor__perspective-canvas,
+.live-editor__perspective-outline {
+  inset: 0;
+  height: 100%;
+  pointer-events: none;
+  position: absolute;
+  width: 100%;
+  z-index: 3;
+}
+
+.live-editor__perspective-canvas {
+  object-fit: fill;
+}
+
+.live-editor__perspective-outline polygon {
+  fill: rgba(20, 184, 166, 0.08);
+  stroke: #14b8a6;
+  stroke-dasharray: 2 1.2;
+  stroke-width: 0.7;
+  vector-effect: non-scaling-stroke;
+}
+
+.live-editor__perspective-handle {
+  background: #14b8a6;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
+  cursor: move;
+  height: 22px;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 22px;
+  z-index: 6;
+}
+
+.live-editor__perspective-handle:hover,
+.live-editor__perspective-handle:focus-visible {
+  outline: 3px solid rgba(20, 184, 166, 0.28);
+  outline-offset: 2px;
+}
