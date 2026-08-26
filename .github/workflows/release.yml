@@ -104,6 +104,6 @@ jobs:
             "OpenMockup-Studio-Windows-x64.zip" `
             "OpenMockup-Studio-Windows-x64.zip.sha256" `
             --repo $env:GITHUB_REPOSITORY `
-            --target $env:GITHUB_SHA `
+            --target main `
             --title "OpenMockup Studio $env:RELEASE_TAG" `
             --generate-notes
