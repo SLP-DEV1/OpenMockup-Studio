@@ -21,6 +21,12 @@ The project follows a lightweight changelog format. Until formal releases are pu
 - Disabled PSD selection in the public demo and added an explicit link to the full local version.
 - Added the demo build to CI so static hosting regressions are caught before merge.
 
+### Reliability
+
+- Added a bounded Photopea initialization wait so PSD mode fails clearly instead of hanging forever when Photopea cannot load.
+- Made Photopea startup waits terminate cleanly when the client is destroyed.
+- Corrected `dev:public` guidance to explain that OpenMockup stays on localhost while the Cloudflare URL is only used as Photopea's public asset base.
+
 ### Application metadata
 
 - Improved page title and social/SEO metadata for hosted deployments.
