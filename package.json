@@ -16,6 +16,7 @@
     "typecheck:strict": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
     "test": "vitest run",
     "test:watch": "vitest",
+    "check": "npm run typecheck:strict && npm test && npm run build",
     "clean": "node scripts/clean.mjs"
   },
   "dependencies": {
