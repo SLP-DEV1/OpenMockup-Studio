@@ -1,41 +1,47 @@
 # OpenMockup Studio
 
-> Create complete product-mockup batches in your browser — from flat images or PSD Smart Objects.
+> **Open-source batch mockup generator for product sellers and creators.** Combine many designs with many mockups, adjust placement visually, and export every result as a ZIP.
 
 [![CI](https://github.com/SLP-DEV1/OpenMockup-Studio/actions/workflows/ci.yml/badge.svg)](https://github.com/SLP-DEV1/OpenMockup-Studio/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js 20.19+](https://img.shields.io/badge/Node.js-20.19%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Made with React](https://img.shields.io/badge/React-TypeScript-61DAFB?logo=react&logoColor=white)](https://react.dev/)
 
-OpenMockup Studio is a free, browser-based batch mockup tool for small shops, artists, print businesses, and marketplace sellers. Load one or more mockups, add multiple designs, adjust their placement visually, and export every combination as a ZIP file.
+**Free · local-first · no account · no subscription**
 
 ![OpenMockup Studio interface](docs/screenshot.png)
 
-## Why OpenMockup Studio?
+OpenMockup Studio is built for Etsy, WooCommerce, marketplace sellers, artists, print shops, and anyone tired of producing product mockups one by one. Load mockups, add designs, fine-tune placement, preview the result, then generate the full batch.
 
-- **Batch-first workflow:** export every mockup/design combination in one run.
-- **PSD and image support:** use PSD Smart Objects or flat PNG, JPG, and WebP mockups.
-- **Visual placement:** move, resize, rotate, anchor, and fit designs directly in the editor.
-- **Marketplace-ready output:** crop, resize, watermark, rename, and convert exported files.
-- **Local image rendering:** flat image mockups stay in your browser.
-- **No account required:** run the project locally or host it yourself.
+> If OpenMockup Studio saves you manual mockup work, a ⭐ on GitHub helps more creators find it.
+
+## Why use it?
+
+- **Batch-first:** create every mockup/design combination in one run.
+- **PSD Smart Object support:** automate compatible PSD templates through Photopea.
+- **Flat image support:** use PNG, JPG, and WebP mockups directly in the browser.
+- **Visual placement editor:** move, scale, rotate, anchor, fit, and adjust opacity.
+- **Marketplace-ready exports:** crop, resize, watermark, rename, convert, and ZIP results.
+- **Local-first workflow:** flat-image rendering stays in your browser.
+- **Self-hostable:** no account or hosted service is required.
 
 ## Quick start
 
-### Windows
+### Windows: easiest route
 
-Download or clone the repository, then double-click one of these files:
+1. [Download the repository as a ZIP](https://github.com/SLP-DEV1/OpenMockup-Studio/archive/refs/heads/main.zip) and extract it.
+2. Install [Node.js 20.19+](https://nodejs.org/).
+3. Double-click the launcher you need:
 
 | Launcher | Use it for |
 | --- | --- |
-| `start-local.bat` | PNG, JPG, and WebP mockups; no public tunnel |
-| `start.bat` | Full PSD mode with Photopea and a temporary HTTPS asset tunnel |
+| `start-local.bat` | PNG, JPG, and WebP mockups; fully local app server |
+| `start.bat` | PSD mode with Photopea and a temporary HTTPS asset tunnel |
 | `stop.bat` | Stop the local server and tunnel |
 
-The app opens at [http://127.0.0.1:5173](http://127.0.0.1:5173). Keep the launcher window open while you work.
+The app opens at `http://127.0.0.1:5173`. Keep the launcher window open while you work.
 
 ### Developers
-
-Requirements: Node.js 20.19 or newer and npm 10 or newer.
 
 ```bash
 git clone https://github.com/SLP-DEV1/OpenMockup-Studio.git
@@ -44,67 +50,37 @@ npm ci
 npm run dev
 ```
 
-Then open the URL shown by Vite, normally `http://127.0.0.1:5173`.
-
-For PSD support with a temporary Cloudflare Tunnel, install [`cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) and run:
+For PSD support with a temporary Cloudflare Tunnel, install `cloudflared` and run:
 
 ```bash
 npm run dev:public
 ```
 
-## How it works
+## Typical workflow
 
 1. Add one or more PSD, PNG, JPG, or WebP mockups.
 2. Add your PNG, JPG, or WebP designs.
-3. Select a mockup and design.
+3. Select a mockup and a design.
 4. Adjust placement, scale, rotation, fit, and opacity.
 5. Preview the result.
 6. Export all combinations as a ZIP.
 
-### Rendering modes
+## Rendering modes
 
 | Capability | Flat image mode | PSD mode |
 | --- | ---: | ---: |
 | PNG/JPG/WebP mockups | Yes | — |
 | PSD Smart Objects | — | Yes |
-| Rendering location | Browser Canvas | Photopea iframe |
-| Public asset URL required | No | Yes |
+| Rendering | Browser Canvas | Photopea iframe |
+| Public asset URL needed | No | Yes |
 | Batch ZIP export | Yes | Yes |
+| Account required | No | No |
 
-Flat image mockups are rendered entirely with the browser Canvas API. PSD rendering loads Photopea in an iframe and temporarily exposes the selected design through the local `__openmockup/design` endpoint so Photopea can retrieve it.
+### Privacy note
 
-## Privacy and PSD mode
+Flat image rendering stays in the browser. PSD mode is different: Photopea must be able to download the selected design from a public HTTPS address. `start.bat` / `npm run dev:public` creates a temporary Cloudflare Tunnel for that asset flow.
 
-Flat image rendering stays in your browser. PSD mode is different: Photopea must be able to download the selected design from a public HTTPS address. With `npm run dev:public` or `start.bat`, OpenMockup Studio creates a temporary Cloudflare Tunnel for that purpose.
-
-Do not use PSD mode for confidential assets unless you understand and accept this data flow. OpenMockup Studio is not affiliated with Photopea, and PSD support depends on Photopea's public iframe/API behavior.
-
-## Hosting
-
-### Static hosting
-
-Static hosting works for flat image mockups only. PSD mode requires a server-side endpoint for temporary design assets. If the app is hosted below a subpath, configure Vite's public base path for that deployment.
-
-### VPS or server deployment
-
-Build the app and run Vite's preview server behind a reverse proxy such as Caddy or Nginx:
-
-```bash
-npm ci
-npm run build
-npm run preview
-```
-
-Example environment variables:
-
-```env
-OPENMOCKUP_PUBLIC_BASE_URL=https://openmockup.example.com
-OPENMOCKUP_MAX_DESIGN_MB=50
-OPENMOCKUP_DESIGN_TTL_MS=1800000
-OPENMOCKUP_ALLOW_PUBLIC_UPLOADS=1
-```
-
-Public uploads are disabled by default. Enable them only when the deployment is protected by authentication, a private network, or equivalent access controls. Proxy the public domain to the local preview server, normally `http://127.0.0.1:4173`.
+Do not use PSD mode for confidential assets unless you understand and accept this data flow. OpenMockup Studio is not affiliated with Photopea.
 
 ## Commands
 
@@ -116,89 +92,53 @@ Public uploads are disabled by default. Enable them only when the deployment is 
 | `npm run typecheck` | Run TypeScript checks |
 | `npm run typecheck:strict` | Include unused-code checks |
 | `npm test` | Run the automated test suite once |
-| `npm run test:watch` | Re-run tests while files change |
 | `npm run build` | Type-check and create a production build |
+| `npm run check` | Run strict typecheck, tests, and production build |
 | `npm run preview` | Preview the production build |
 | `npm run clean` | Remove dependencies, builds, and local caches |
 
-## PSD troubleshooting
+## Hosting
 
-### Photopea needs a public HTTPS design URL
+Flat image mode can be hosted as a static Vite build. PSD mode additionally needs the temporary-design endpoint used by the Photopea bridge.
 
-Start the app with `start.bat` or `npm run dev:public`. Localhost URLs cannot be fetched by Photopea.
-
-### A `trycloudflare.com` address shows `DNS_PROBE_FINISHED_NXDOMAIN`
-
-Open the app at `http://127.0.0.1:5173`, not at the tunnel address. Temporary tunnel URLs expire when the launcher stops. Run `stop.bat`, then `start.bat` to create a new one.
-
-### A Smart Object is not detected
-
-- Confirm that the PSD contains a Smart Object layer.
-- Unlock deeply nested or locked layers where possible.
-- Give the intended layer a descriptive name.
-- Simplify unusual PSD structures before retrying.
-
-PSD batches run serially to keep the Photopea session stable.
-
-## Project structure
-
-```text
-src/components/       Focused React interface components
-src/lib/app/          App-level mockup, persistence, and cache logic
-src/lib/config/       Product and export profiles
-src/lib/export/       Conversion, naming, ZIP, and download helpers
-src/lib/photopea/     Photopea bridge and rendering scripts
-src/lib/              Image rendering, placement, and PSD detection
-scripts/              Local launcher and cleanup helpers
-docs/                 Documentation assets
-```
-
-App-level browser logic lives outside the main React component where practical. Pure placement, naming, mockup, persistence, and cache behavior is covered by Vitest. GitHub Actions runs strict TypeScript checks, tests, and the production build for every pull request. Dependabot keeps npm and workflow dependencies visible through small, reviewable pull requests.
-
-## Contributing
-
-Issues and pull requests are welcome. Before submitting a change, run:
+For a server deployment:
 
 ```bash
 npm ci
-npm run typecheck:strict
-npm test
 npm run build
+npm run preview
 ```
 
-Do not commit dependencies, build output, exports, private mockups, PSD files, or runtime tunnel files.
+Example environment variables are documented in [`.env.example`](.env.example). Public uploads are disabled by default; only enable them behind authentication, a private network, or equivalent access controls.
 
-## Roadmap
+## Troubleshooting PSD mode
 
-The roadmap is ordered by expected user value and the technical foundation each item needs.
+**Photopea cannot fetch the design:** use `start.bat` or `npm run dev:public`; localhost-only asset URLs are not reachable by Photopea.
 
-### Foundation
+**A `trycloudflare.com` address expired:** open the app at `http://127.0.0.1:5173`, run `stop.bat`, then start PSD mode again to create a new temporary tunnel.
 
-- [x] Reproducible installs, strict type checks, automated tests, and CI
-- [x] Extract testable mockup, persistence, and preview-cache modules from `App.tsx`
-- [ ] Add component-level tests for file selection, presets, and batch cancellation
-- [ ] Add browser-based export smoke tests with small generated fixtures
+**A Smart Object is not detected:** verify that the PSD really contains a Smart Object, unlock unusual nested layers where possible, and simplify highly unusual PSD structures before retrying.
 
-### Editing and realism
+PSD batches run serially to keep the Photopea session stable.
 
-- [ ] Four-point perspective transforms for flat image mockups
-- [ ] Reusable masks for PNG, JPG, and WebP mockups
-- [ ] Shadow, highlight, and blend-mode controls
-- [ ] Drag-and-drop design ordering and per-product placement defaults
+## Project health
 
-### Reliability and performance
+The repository uses strict TypeScript checks, Vitest, production builds in GitHub Actions, and Dependabot. Core placement, naming, mockup, persistence, cache, and export behavior has automated coverage.
 
-- [ ] Faster batch previews with controlled parallel image rendering
-- [ ] Better PSD timeout recovery and resumable batch exports
-- [ ] Export manifest import for retrying only failed combinations
-- [ ] Performance budgets for large batches and high-resolution files
+- [Roadmap](docs/ROADMAP.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Changelog](CHANGELOG.md)
 
-### Hosting and distribution
+## Contributing
 
-- [ ] Authenticated self-hosted asset service with rate limits
-- [ ] Static image-mode demo deployment
-- [ ] Versioned releases, changelog automation, and a downloadable Windows package
-- [ ] Optional user accounts and shared presets for hosted deployments
+Bug reports, feature ideas, documentation improvements, and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and run this before opening a PR:
+
+```bash
+npm ci
+npm run check
+```
 
 ## License
 

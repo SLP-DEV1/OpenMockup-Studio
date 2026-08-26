@@ -1,0 +1,40 @@
+name: Feature request
+description: Suggest an improvement to the mockup workflow
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What manual work, limitation, or workflow problem does this address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior you would like to see.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Batch workflow
+        - Flat image rendering
+        - PSD / Photopea
+        - Placement editor
+        - Export / naming
+        - Hosting / deployment
+        - Performance
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional workarounds or competing tools/workflows you have tried.
