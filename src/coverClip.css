@@ -1,0 +1,18 @@
+.live-editor__cover-clip {
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 3;
+}
+
+.live-editor__cover-design {
+  position: absolute;
+  transform-origin: center center;
+}
+
+.live-editor__cover-design img {
+  display: block;
+  height: 100%;
+  object-fit: fill;
+  width: 100%;
+}
