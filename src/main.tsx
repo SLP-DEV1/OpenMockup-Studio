@@ -1,6 +1,7 @@
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./styles.css";
+import "./coverClip.css";
 
 const isStaticDemo = import.meta.env.MODE === "demo";
 

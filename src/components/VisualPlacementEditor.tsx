@@ -49,6 +49,9 @@ export function VisualPlacementEditor({ documentSize, design, mockup, settings, 
   const aspect = documentSize.width > 0 && documentSize.height > 0 ? documentSize.width / documentSize.height : 1.5;
 
   const metrics = useMemo(() => computePlacementMetrics(settings, designSize), [designSize, settings]);
+  const usesCoverClip = mode === "image" && settings.fitMode === "cover" && Boolean(design);
+  const targetWidth = Math.max(0.001, metrics.targetWidth);
+  const targetHeight = Math.max(0.001, metrics.targetHeight);
 
   function pointerPercent(event: React.PointerEvent): { x: number; y: number } | null {
     const element = ref.current;
@@ -177,6 +180,32 @@ export function VisualPlacementEditor({ documentSize, design, mockup, settings, 
           <span>{slotLabel}</span>
         </div>
 
+        {usesCoverClip && design ? (
+          <div
+            className="live-editor__cover-clip"
+            style={{
+              left: `${metrics.targetLeft}%`,
+              top: `${metrics.targetTop}%`,
+              width: `${metrics.targetWidth}%`,
+              height: `${metrics.targetHeight}%`,
+            }}
+          >
+            <div
+              className="live-editor__cover-design"
+              style={{
+                left: `${((metrics.displayLeft - metrics.targetLeft) / targetWidth) * 100}%`,
+                top: `${((metrics.displayTop - metrics.targetTop) / targetHeight) * 100}%`,
+                width: `${(metrics.displayWidth / targetWidth) * 100}%`,
+                height: `${(metrics.displayHeight / targetHeight) * 100}%`,
+                opacity: clamp(settings.opacity, 0, 100) / 100,
+                transform: `rotate(${settings.rotation}deg)`,
+              }}
+            >
+              <img src={design.url} alt="" aria-hidden="true" />
+            </div>
+          </div>
+        ) : null}
+
         <div
           className="live-editor__design-box live-editor__design-box--mockcity"
           style={{
@@ -184,21 +213,21 @@ export function VisualPlacementEditor({ documentSize, design, mockup, settings, 
             top: `${metrics.displayTop}%`,
             width: `${metrics.displayWidth}%`,
             height: `${metrics.displayHeight}%`,
-            opacity: clamp(settings.opacity, 0, 100) / 100,
+            opacity: usesCoverClip ? 1 : clamp(settings.opacity, 0, 100) / 100,
             transform: `rotate(${settings.rotation}deg)`,
           }}
           onPointerDown={(event) => beginDrag(event, "design-move")}
           title="Drag design"
         >
-          {design ? (
+          {design && !usesCoverClip ? (
             <img
               src={design.url}
               alt={design.file.name}
               style={{ objectFit: settings.fitMode === "cover" ? "cover" : "contain" }}
             />
-          ) : (
+          ) : !design ? (
             <span>No design</span>
-          )}
+          ) : null}
 
           <button
             type="button"

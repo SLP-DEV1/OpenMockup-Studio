@@ -1,6 +1,12 @@
 import { loadImageFromFile } from "./images";
-import { computePlacementMetrics, clamp } from "./renderPlacement";
+import { computePlacementMetrics, clamp, type PlacementMetrics } from "./renderPlacement";
 import type { MockupSettings } from "../types";
+
+interface ClipContext {
+  beginPath(): void;
+  rect(x: number, y: number, width: number, height: number): void;
+  clip(): void;
+}
 
 function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
@@ -9,6 +15,26 @@ function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
       else resolve(blob);
     }, "image/png");
   });
+}
+
+export function clipCoverPlacement(
+  ctx: ClipContext,
+  settings: MockupSettings,
+  metrics: PlacementMetrics,
+  canvasWidth: number,
+  canvasHeight: number,
+): boolean {
+  if (settings.fitMode !== "cover") return false;
+
+  const clipX = (metrics.targetLeft / 100) * canvasWidth;
+  const clipY = (metrics.targetTop / 100) * canvasHeight;
+  const clipW = (metrics.targetWidth / 100) * canvasWidth;
+  const clipH = (metrics.targetHeight / 100) * canvasHeight;
+
+  ctx.beginPath();
+  ctx.rect(clipX, clipY, clipW, clipH);
+  ctx.clip();
+  return true;
 }
 
 export async function renderImageMockup(mockup: File, design: File, settings: MockupSettings): Promise<Blob> {
@@ -40,6 +66,7 @@ export async function renderImageMockup(mockup: File, design: File, settings: Mo
   const drawH = (metrics.displayHeight / 100) * height;
 
   ctx.save();
+  clipCoverPlacement(ctx, settings, metrics, width, height);
   ctx.globalAlpha = clamp(settings.opacity, 0, 100) / 100;
   ctx.translate(drawX + drawW / 2, drawY + drawH / 2);
   ctx.rotate((settings.rotation * Math.PI) / 180);
