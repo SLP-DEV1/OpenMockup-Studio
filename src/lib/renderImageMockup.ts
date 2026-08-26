@@ -1,4 +1,5 @@
 import { loadImageFromFile } from "./images";
+import { drawPerspectiveImage, isValidPerspectiveCorners } from "./perspective";
 import { computePlacementMetrics, clamp, type PlacementMetrics } from "./renderPlacement";
 import type { MockupSettings } from "../types";
 
@@ -54,6 +55,24 @@ export async function renderImageMockup(mockup: File, design: File, settings: Mo
 
   ctx.clearRect(0, 0, width, height);
   ctx.drawImage(mockupImage, 0, 0, width, height);
+
+  const perspective = settings.perspective;
+  if (perspective?.enabled) {
+    if (!isValidPerspectiveCorners(perspective.corners)) {
+      throw new Error("Perspective corners form an invalid or self-intersecting quadrilateral.");
+    }
+
+    ctx.save();
+    try {
+      ctx.globalAlpha = clamp(settings.opacity, 0, 100) / 100;
+      if (!drawPerspectiveImage(ctx, designImage, perspective.corners, width, height)) {
+        throw new Error("Perspective transform could not be rendered.");
+      }
+    } finally {
+      ctx.restore();
+    }
+    return canvasToPngBlob(canvas);
+  }
 
   const metrics = computePlacementMetrics(settings, {
     width: designImage.naturalWidth || designImage.width || 1,
