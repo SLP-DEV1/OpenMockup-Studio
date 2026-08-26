@@ -24,11 +24,53 @@ function csvValue(value: string): string {
   return `"${String(value || "").replace(/"/g, '""')}"`;
 }
 
+function collisionKey(path: string): string {
+  return path.toLocaleLowerCase("en-US");
+}
+
+function appendCollisionSuffix(path: string, suffix: number): string {
+  const slashIndex = path.lastIndexOf("/");
+  const directory = slashIndex >= 0 ? path.slice(0, slashIndex + 1) : "";
+  const fileName = slashIndex >= 0 ? path.slice(slashIndex + 1) : path;
+  const dotIndex = fileName.lastIndexOf(".");
+  const hasExtension = dotIndex > 0;
+  const stem = hasExtension ? fileName.slice(0, dotIndex) : fileName;
+  const extension = hasExtension ? fileName.slice(dotIndex) : "";
+  return `${directory}${stem}-${suffix}${extension}`;
+}
+
+export function makeUniqueArchivePaths(paths: string[]): string[] {
+  const used = new Set<string>();
+  const nextSuffix = new Map<string, number>();
+
+  return paths.map((path) => {
+    const key = collisionKey(path);
+    if (!used.has(key)) {
+      used.add(key);
+      nextSuffix.set(key, 2);
+      return path;
+    }
+
+    let suffix = nextSuffix.get(key) ?? 2;
+    let candidate = appendCollisionSuffix(path, suffix);
+    while (used.has(collisionKey(candidate))) {
+      suffix += 1;
+      candidate = appendCollisionSuffix(path, suffix);
+    }
+
+    nextSuffix.set(key, suffix + 1);
+    used.add(collisionKey(candidate));
+    return candidate;
+  });
+}
+
 export async function downloadZip(results: ExportResult[], zipName: string, errors: BatchError[] = []): Promise<void> {
   const zip = new JSZip();
+  const archivePaths = makeUniqueArchivePaths(results.map((result) => result.fileName));
+  const entries = results.map((result, index) => ({ result, fileName: archivePaths[index] }));
 
-  for (const result of results) {
-    zip.file(result.fileName, result.blob);
+  for (const entry of entries) {
+    zip.file(entry.fileName, entry.result.blob);
   }
 
   if (errors.length > 0) {
@@ -42,7 +84,7 @@ export async function downloadZip(results: ExportResult[], zipName: string, erro
 
   const reportRows = [
     ["type", "file", "mockup", "design", "message"].map(csvValue).join(","),
-    ...results.map((result) => ["success", result.fileName, "", "", ""].map(csvValue).join(",")),
+    ...entries.map((entry) => ["success", entry.fileName, "", "", ""].map(csvValue).join(",")),
     ...errors.map((error) => ["error", "", error.mockupName, error.designName, error.message].map(csvValue).join(",")),
   ];
   zip.file("_openmockup-report.csv", reportRows.join("\n"));
