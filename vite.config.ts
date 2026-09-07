@@ -80,7 +80,7 @@ function openMockupDesignServer(): Plugin {
           "Content-Length": String(buffer.byteLength),
           "X-OpenMockup-Token": isolatedAssetToken,
         },
-        body: buffer,
+        body: new Uint8Array(buffer),
       });
       return {
         status: response.status,
