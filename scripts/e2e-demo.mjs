@@ -43,6 +43,24 @@ async function waitForDesignsLoaded(page) {
   await page.locator(".status-pill").filter({ hasText: "2 designs loaded" }).waitFor({ state: "visible" });
 }
 
+async function waitForGeneratedPreview(page, timeoutMs = 20_000) {
+  const preview = page.locator('img[alt="Generated mockup preview"]');
+  const status = page.locator(".status-pill");
+  const startedAt = Date.now();
+  let lastStatus = "";
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (await preview.isVisible().catch(() => false)) return;
+    lastStatus = (await status.textContent().catch(() => ""))?.trim() || "";
+    if (/failed|could not|error|invalid|unsupported/i.test(lastStatus)) {
+      throw new Error(`Preview failed in the UI: ${lastStatus}`);
+    }
+    await sleep(250);
+  }
+
+  throw new Error(`Preview did not appear within ${timeoutMs}ms. Last UI status: ${lastStatus || "<empty>"}`);
+}
+
 const previewProcess = spawn(process.execPath, [
   viteBin,
   "preview",
@@ -63,6 +81,12 @@ try {
   await waitForServer();
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ acceptDownloads: true });
+  page.on("pageerror", (error) => console.error(`[browser pageerror] ${error.message}`));
+  page.on("console", (message) => {
+    if (["error", "warning"].includes(message.type())) {
+      console.error(`[browser ${message.type()}] ${message.text()}`);
+    }
+  });
 
   await page.goto(BASE_URL, { waitUntil: "networkidle" });
   await page.getByRole("heading", { name: "OpenMockup Studio" }).waitFor();
@@ -81,7 +105,7 @@ try {
   const refreshButton = page.getByRole("button", { name: "Refresh Preview" });
   await refreshButton.waitFor({ state: "visible" });
   await refreshButton.click();
-  await page.locator('img[alt="Generated mockup preview"]').waitFor({ state: "visible" });
+  await waitForGeneratedPreview(page);
 
   const presetDownloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export Preset JSON" }).click();
