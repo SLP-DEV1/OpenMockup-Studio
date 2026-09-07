@@ -39,6 +39,10 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+async function waitForDesignsLoaded(page) {
+  await page.locator(".status-pill").filter({ hasText: "2 designs loaded" }).waitFor({ state: "visible" });
+}
+
 const previewProcess = spawn(process.execPath, [
   viteBin,
   "preview",
@@ -63,7 +67,7 @@ try {
   await page.goto(BASE_URL, { waitUntil: "networkidle" });
   await page.getByRole("heading", { name: "OpenMockup Studio" }).waitFor();
   await page.getByRole("button", { name: "Try sample project" }).click();
-  await page.getByText(/2 designs loaded/).waitFor();
+  await waitForDesignsLoaded(page);
   await page.getByRole("button", { name: "Use my files" }).click();
 
   const fileInputs = page.locator('input[type="file"]');
@@ -73,7 +77,7 @@ try {
     join(process.cwd(), "public", "examples", "sample-design-leaf.png"),
   ]);
 
-  await page.getByText(/2 designs loaded/).waitFor();
+  await waitForDesignsLoaded(page);
   const refreshButton = page.getByRole("button", { name: "Refresh Preview" });
   await refreshButton.waitFor({ state: "visible" });
   await refreshButton.click();
@@ -97,7 +101,6 @@ try {
   assert(zipDownload.suggestedFilename().endsWith(".zip"), "Batch export filename is not a ZIP.");
   assert((await stat(zipPath)).size > 100, "Batch ZIP is unexpectedly empty.");
 
-  await page.getByText(/2 mockups exported|2 mockup/i).waitFor({ timeout: 10_000 }).catch(() => {});
   console.log("Browser smoke passed: file selection, preview, preset download and batch ZIP export.");
 } finally {
   if (browser) await browser.close();
