@@ -107,9 +107,16 @@ try {
   await refreshButton.click();
   await waitForGeneratedPreview(page);
 
-  const presetDownloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export Preset JSON" }).click();
-  const presetDownload = await presetDownloadPromise;
+  const advancedToolsSummary = page.locator("summary").filter({ hasText: "Advanced Tools" });
+  await advancedToolsSummary.waitFor({ state: "visible" });
+  await advancedToolsSummary.click();
+
+  const presetButton = page.getByRole("button", { name: "Export Preset JSON" });
+  await presetButton.waitFor({ state: "visible" });
+  const [presetDownload] = await Promise.all([
+    page.waitForEvent("download", { timeout: 10_000 }),
+    presetButton.click(),
+  ]);
   const presetPath = await presetDownload.path();
   assert(presetPath, "Preset download did not produce a file.");
   assert(presetDownload.suggestedFilename().endsWith(".json"), "Preset download filename is not JSON.");
@@ -117,9 +124,10 @@ try {
 
   const exportButton = page.getByRole("button", { name: /Export All/ });
   await exportButton.waitFor({ state: "visible" });
-  const zipDownloadPromise = page.waitForEvent("download", { timeout: 30_000 });
-  await exportButton.click();
-  const zipDownload = await zipDownloadPromise;
+  const [zipDownload] = await Promise.all([
+    page.waitForEvent("download", { timeout: 30_000 }),
+    exportButton.click(),
+  ]);
   const zipPath = await zipDownload.path();
   assert(zipPath, "Batch export did not produce a ZIP file.");
   assert(zipDownload.suggestedFilename().endsWith(".zip"), "Batch export filename is not a ZIP.");
