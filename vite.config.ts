@@ -14,7 +14,7 @@ const MAX_DESIGN_BYTES = Math.max(1, Number(process.env.OPENMOCKUP_MAX_DESIGN_MB
 const ALLOW_PUBLIC_UPLOADS = process.env.OPENMOCKUP_ALLOW_PUBLIC_UPLOADS === "1";
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 
-function normalizePublicBaseUrl(value: string | undefined): string | null {
+function normalizeUrl(value: string | undefined): string | null {
   if (!value) return null;
   return value.replace(/\/+$/, "");
 }
@@ -54,14 +54,45 @@ function acceptsUpload(req: IncomingMessage): boolean {
 
 function openMockupDesignServer(): Plugin {
   const designs = new Map<string, StoredDesign>();
-  const publicBaseUrl = normalizePublicBaseUrl(
+  const publicBaseUrl = normalizeUrl(
     process.env.OPENMOCKUP_PUBLIC_BASE_URL || process.env.VITE_OPENMOCKUP_PUBLIC_BASE_URL,
   );
+  const isolatedAssetServerUrl = normalizeUrl(process.env.OPENMOCKUP_ASSET_SERVER_URL);
+  const isolatedAssetToken = process.env.OPENMOCKUP_ASSET_TOKEN || "";
 
   function cleanupDesigns(): void {
     const expiresBefore = Date.now() - DESIGN_TTL_MS;
     for (const [id, item] of designs) {
       if (item.createdAt < expiresBefore) designs.delete(id);
+    }
+  }
+
+  async function forwardToIsolatedAssetServer(buffer: Buffer, contentType: string): Promise<{ status: number; contentType: string; body: string }> {
+    if (!isolatedAssetServerUrl || !isolatedAssetToken) {
+      return { status: 500, contentType: "text/plain", body: "Isolated asset server is not configured." };
+    }
+
+    try {
+      const response = await fetch(`${isolatedAssetServerUrl}/design`, {
+        method: "POST",
+        headers: {
+          "Content-Type": contentType,
+          "Content-Length": String(buffer.byteLength),
+          "X-OpenMockup-Token": isolatedAssetToken,
+        },
+        body: buffer,
+      });
+      return {
+        status: response.status,
+        contentType: response.headers.get("Content-Type") || "text/plain",
+        body: await response.text(),
+      };
+    } catch (error) {
+      return {
+        status: 502,
+        contentType: "text/plain",
+        body: error instanceof Error ? `Isolated asset server failed: ${error.message}` : "Isolated asset server failed.",
+      };
     }
   }
 
@@ -114,12 +145,24 @@ function openMockupDesignServer(): Plugin {
 
       req.on("end", () => {
         if (tooLarge) return;
-        const contentType = req.headers["content-type"] ?? "application/octet-stream";
-        const normalizedContentType = Array.isArray(contentType) ? contentType[0] : contentType;
-        const id = `${randomUUID()}${extensionForContentType(normalizedContentType)}`;
+        const contentTypeHeader = req.headers["content-type"] ?? "application/octet-stream";
+        const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader[0] : contentTypeHeader;
+        const buffer = Buffer.concat(chunks);
+
+        if (isolatedAssetServerUrl) {
+          void forwardToIsolatedAssetServer(buffer, contentType).then((forwarded) => {
+            if (res.writableEnded) return;
+            res.statusCode = forwarded.status;
+            res.setHeader("Content-Type", forwarded.contentType);
+            res.end(forwarded.body);
+          });
+          return;
+        }
+
+        const id = `${randomUUID()}${extensionForContentType(contentType)}`;
         designs.set(id, {
-          buffer: Buffer.concat(chunks),
-          contentType: normalizedContentType,
+          buffer,
+          contentType,
           createdAt: Date.now(),
         });
         const path = `/__openmockup/design/${id}`;
@@ -175,9 +218,6 @@ export default defineConfig(({ mode }) => {
     base: isStaticDemo
       ? normalizeBasePath(process.env.OPENMOCKUP_BASE_PATH ?? "/OpenMockup-Studio/")
       : "/",
-    server: {
-      allowedHosts: [".trycloudflare.com"],
-    },
     plugins: isStaticDemo ? [react()] : [react(), openMockupDesignServer()],
   };
 });

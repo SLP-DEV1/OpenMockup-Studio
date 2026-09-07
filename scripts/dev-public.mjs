@@ -1,10 +1,15 @@
+import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
+import { createDesignAssetServer } from "./design-asset-server.mjs";
 
 const APP_PORT = String(process.env.OPENMOCKUP_PORT || process.env.PORT || "5173");
+const parsedAppPort = Number(APP_PORT);
+const ASSET_PORT = String(process.env.OPENMOCKUP_ASSET_PORT || (Number.isFinite(parsedAppPort) ? parsedAppPort + 1 : 5174));
 const LOCAL_URL = (process.env.OPENMOCKUP_LOCAL_URL || `http://127.0.0.1:${APP_PORT}`).replace(/\/+$/, "");
+const ASSET_LOCAL_URL = `http://127.0.0.1:${ASSET_PORT}`;
 const CLOUD_FLARED = findCloudflared();
 const PID_FILE = join(process.cwd(), ".openmockup-pids.bat");
 const URL_FILE = join(process.cwd(), ".openmockup-public-url.txt");
@@ -16,6 +21,15 @@ const TUNNEL_CONNECT_WAIT_MS = Number(process.env.OPENMOCKUP_TUNNEL_CONNECT_WAIT
 const RETRY_MS = Number(process.env.OPENMOCKUP_RETRY_MS || 750);
 const OPEN_DELAY_MS = Number(process.env.OPENMOCKUP_OPEN_DELAY_MS || 1500);
 const TUNNEL_PROTOCOL = process.env.OPENMOCKUP_TUNNEL_PROTOCOL || "http2";
+const MAX_DESIGN_BYTES = Math.max(1, Number(process.env.OPENMOCKUP_MAX_DESIGN_MB || 50)) * 1024 * 1024;
+const DESIGN_TTL_MS = Number(process.env.OPENMOCKUP_DESIGN_TTL_MS || 30 * 60 * 1000);
+const ASSET_TOKEN = randomBytes(32).toString("hex");
+
+const assetServer = createDesignAssetServer({
+  token: ASSET_TOKEN,
+  maxDesignBytes: MAX_DESIGN_BYTES,
+  ttlMs: DESIGN_TTL_MS,
+});
 
 let viteProcess;
 let tunnelProcess;
@@ -103,13 +117,14 @@ function stopAll(code = 0) {
 
   if (viteProcess && !viteProcess.killed) viteProcess.kill("SIGTERM");
   if (tunnelProcess && !tunnelProcess.killed) tunnelProcess.kill("SIGTERM");
+  void assetServer.close().catch(() => {});
 
   removeRuntimeFiles();
   setTimeout(() => process.exit(code), 250);
 }
 
 function printCloudflaredHelp() {
-  console.error(`\n[openmockup] cloudflared was not found.\n\nInstall it first, then run this command again:\n\nWindows:\n  winget install Cloudflare.cloudflared\n\nmacOS:\n  brew install cloudflared\n\nManual fallback:\n  1. npm run dev\n  2. cloudflared tunnel --url ${LOCAL_URL}\n  3. restart Vite with OPENMOCKUP_PUBLIC_BASE_URL=<the https trycloudflare URL>\n`);
+  console.error(`\n[openmockup] cloudflared was not found.\n\nInstall it first, then run this command again:\n\nWindows:\n  winget install Cloudflare.cloudflared\n\nmacOS:\n  brew install cloudflared\n\nThen use:\n  npm run dev:public\n\nDo not point a public tunnel directly at the Vite app port. OpenMockup Studio intentionally tunnels only its isolated temporary design-asset server.\n`);
 }
 
 function sleep(ms) {
@@ -163,14 +178,16 @@ function startVite(publicBaseUrl) {
     return false;
   }
 
-  log(`Using public Photopea asset base: ${publicBaseUrl}`);
-  log(`The app UI will open locally: ${LOCAL_URL}`);
+  log(`Using isolated public Photopea asset base: ${publicBaseUrl}`);
+  log(`The app UI stays local: ${LOCAL_URL}`);
 
   viteProcess = spawn(process.execPath, [viteBin, "--host", "127.0.0.1", "--port", APP_PORT, "--strictPort"], {
     stdio: "inherit",
     env: {
       ...process.env,
       OPENMOCKUP_PUBLIC_BASE_URL: publicBaseUrl,
+      OPENMOCKUP_ASSET_SERVER_URL: ASSET_LOCAL_URL,
+      OPENMOCKUP_ASSET_TOKEN: ASSET_TOKEN,
     },
   });
 
@@ -184,6 +201,7 @@ function startVite(publicBaseUrl) {
 async function startPublicApp(publicBaseUrl) {
   if (publicUrlStarted) return;
   publicUrlStarted = true;
+  assetServer.setPublicBaseUrl(publicBaseUrl);
 
   if (!startVite(publicBaseUrl)) return;
 
@@ -204,6 +222,7 @@ async function startPublicApp(publicBaseUrl) {
   writeRuntimeFiles(publicBaseUrl);
   log(`Public Photopea asset base: ${publicBaseUrl}`);
   log(`OpenMockup Studio app: ${LOCAL_URL}`);
+  log("Only /design/<random-id> assets are exposed through the tunnel; the UI remains localhost-only.");
   log("Keep this terminal open while using PSD/Photopea mode.");
 
   await sleep(OPEN_DELAY_MS);
@@ -233,35 +252,43 @@ function handleTunnelOutput(chunk) {
   void startPublicApp(publicBaseUrl);
 }
 
-removeRuntimeFiles();
-log("Starting Cloudflare Tunnel for Photopea asset loading...");
-log(`Tunnel target: ${LOCAL_URL}`);
-log(`Tunnel protocol: ${TUNNEL_PROTOCOL}`);
+async function main() {
+  removeRuntimeFiles();
+  const listeningUrl = await assetServer.listen(Number(ASSET_PORT));
+  log(`Isolated design asset server ready: ${listeningUrl}`);
+  log("Starting Cloudflare Tunnel for Photopea asset loading...");
+  log(`Tunnel target: ${ASSET_LOCAL_URL} (design assets only)`);
+  log(`Local UI target: ${LOCAL_URL} (never tunneled)`);
+  log(`Tunnel protocol: ${TUNNEL_PROTOCOL}`);
 
-// The Cloudflare URL is only used as a public asset URL for Photopea.
-// The browser UI opens locally on 127.0.0.1 to avoid trycloudflare DNS/browser issues.
-tunnelProcess = spawn(CLOUD_FLARED, ["tunnel", "--url", LOCAL_URL, "--protocol", TUNNEL_PROTOCOL, "--no-autoupdate"], {
-  stdio: ["ignore", "pipe", "pipe"],
-});
+  tunnelProcess = spawn(CLOUD_FLARED, ["tunnel", "--url", ASSET_LOCAL_URL, "--protocol", TUNNEL_PROTOCOL, "--no-autoupdate"], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
 
-tunnelProcess.stdout.on("data", handleTunnelOutput);
-tunnelProcess.stderr.on("data", handleTunnelOutput);
+  tunnelProcess.stdout.on("data", handleTunnelOutput);
+  tunnelProcess.stderr.on("data", handleTunnelOutput);
 
-tunnelProcess.on("error", (error) => {
-  if (error && error.code === "ENOENT") {
-    printCloudflaredHelp();
-  } else {
-    console.error("[openmockup] Could not start cloudflared:", error);
-  }
-  stopAll(1);
-});
+  tunnelProcess.on("error", (error) => {
+    if (error && error.code === "ENOENT") {
+      printCloudflaredHelp();
+    } else {
+      console.error("[openmockup] Could not start cloudflared:", error);
+    }
+    stopAll(1);
+  });
 
-tunnelProcess.on("exit", (code) => {
-  if (!shuttingDown) {
-    console.error("[openmockup] Cloudflare Tunnel stopped. PSD/Photopea asset loading is no longer available.");
-    stopAll(code ?? 1);
-  }
-});
+  tunnelProcess.on("exit", (code) => {
+    if (!shuttingDown) {
+      console.error("[openmockup] Cloudflare Tunnel stopped. PSD/Photopea asset loading is no longer available.");
+      stopAll(code ?? 1);
+    }
+  });
+}
 
 process.on("SIGINT", () => stopAll(0));
 process.on("SIGTERM", () => stopAll(0));
+
+main().catch((error) => {
+  console.error("[openmockup] Could not start isolated PSD mode:", error);
+  stopAll(1);
+});
