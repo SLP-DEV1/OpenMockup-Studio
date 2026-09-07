@@ -9,6 +9,8 @@ export interface FileNameContext {
   format?: string;
 }
 
+export const DEFAULT_BATCH_GALLERY_LIMIT = 12;
+
 export function downloadBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -64,6 +66,23 @@ export function makeUniqueArchivePaths(paths: string[]): string[] {
   });
 }
 
+export function releaseNonGalleryResults(
+  results: ExportResult[],
+  keepCount = DEFAULT_BATCH_GALLERY_LIMIT,
+  revokeObjectUrl: (url: string) => void = (url) => URL.revokeObjectURL(url),
+): void {
+  const safeKeepCount = Math.max(0, Math.floor(keepCount));
+  for (let index = safeKeepCount; index < results.length; index += 1) {
+    const result = results[index];
+    if (result.url) revokeObjectUrl(result.url);
+    results[index] = {
+      ...result,
+      blob: new Blob([], { type: result.blob.type }),
+      url: "",
+    };
+  }
+}
+
 export async function downloadZip(results: ExportResult[], zipName: string, errors: BatchError[] = []): Promise<void> {
   const zip = new JSZip();
   const archivePaths = makeUniqueArchivePaths(results.map((result) => result.fileName));
@@ -89,8 +108,12 @@ export async function downloadZip(results: ExportResult[], zipName: string, erro
   ];
   zip.file("_openmockup-report.csv", reportRows.join("\n"));
 
-  const blob = await zip.generateAsync({ type: "blob" });
+  const blob = await zip.generateAsync({ type: "blob", streamFiles: true });
   downloadBlob(blob, zipName.endsWith(".zip") ? zipName : `${zipName}.zip`);
+
+  // Keep only a small number of decoded gallery candidates alive after the ZIP is ready.
+  // The array length stays unchanged so status/history counts remain accurate.
+  releaseNonGalleryResults(results);
 }
 
 export function savePreset(settings: MockupSettings, name = "openmockup-preset"): void {

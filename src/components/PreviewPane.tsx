@@ -86,6 +86,7 @@ export function PreviewPane({
   const modeLabel = mockupKind === "image" ? "Image Mockups" : mockupKind === "psd" ? "PSD Mockups" : "Mockups";
   const activeMockup = mockups.find((mockup) => mockup.id === activeMockupId) || mockups[0];
   const activeDesign = designs.find((design) => design.id === activeDesignId) || designs[0];
+  const visiblePreviewGallery = previewGallery.filter((item) => item.url).slice(0, 12);
 
   async function copyErrors(): Promise<void> {
     const text = batchErrors.map((error, index) => `${index + 1}. ${error.mockupName} + ${error.designName}: ${error.message}`).join("\n");
@@ -206,14 +207,18 @@ export function PreviewPane({
           </div>
         </section>
 
-        {previewGallery.length ? (
+        {visiblePreviewGallery.length ? (
           <section className="export-panel gallery-panel">
             <div className="panel__header">
               <h2>Batch Preview Grid</h2>
-              <span className="tiny-status">{previewGallery.length} rendered</span>
+              <span className="tiny-status">
+                {previewGallery.length > visiblePreviewGallery.length
+                  ? `${visiblePreviewGallery.length} shown of ${previewGallery.length} rendered`
+                  : `${visiblePreviewGallery.length} rendered`}
+              </span>
             </div>
             <div className="preview-gallery">
-              {previewGallery.map((item) => (
+              {visiblePreviewGallery.map((item) => (
                 <figure key={`${item.fileName}-${item.url}`}>
                   <img src={item.url} alt={item.fileName} />
                   <figcaption>{item.fileName}</figcaption>
