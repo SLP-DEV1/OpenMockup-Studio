@@ -76,10 +76,18 @@ jobs:
           OPENMOCKUP_BASE_PATH: /
 
       - name: Install pinned browser test runtime
-        run: npm install --no-save --package-lock=false playwright@1.55.0
+        shell: bash
+        run: |
+          PLAYWRIGHT_ROOT="$RUNNER_TEMP/openmockup-playwright"
+          mkdir -p "$PLAYWRIGHT_ROOT"
+          npm install --prefix "$PLAYWRIGHT_ROOT" --no-save --package-lock=false --ignore-scripts playwright@1.55.0
+          echo "OPENMOCKUP_PLAYWRIGHT_ROOT=$PLAYWRIGHT_ROOT" >> "$GITHUB_ENV"
+          echo "OPENMOCKUP_PLAYWRIGHT_MODULE=$PLAYWRIGHT_ROOT/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_ROOT/browsers" >> "$GITHUB_ENV"
 
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        shell: bash
+        run: "$OPENMOCKUP_PLAYWRIGHT_ROOT/node_modules/.bin/playwright install --with-deps chromium"
 
       - name: Run browser export smoke
         run: node scripts/e2e-demo.mjs
