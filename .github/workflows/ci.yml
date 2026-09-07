@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - "release/**"
+      - "hardening/**"
   pull_request:
 
 permissions:
@@ -16,8 +17,22 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    name: Check (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            node: 20.19.0
+            label: ubuntu-node20
+          - os: ubuntu-latest
+            node: 22.19.0
+            label: ubuntu-node22
+          - os: windows-latest
+            node: 22.19.0
+            label: windows-node22
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -25,7 +40,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
           cache: npm
 
       - name: Install dependencies
@@ -36,3 +51,43 @@ jobs:
 
       - name: Build static demo
         run: npm run build:demo
+
+  browser-smoke:
+    name: Browser export smoke
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.19.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build demo at root path
+        run: npm run build:demo
+        env:
+          OPENMOCKUP_BASE_PATH: /
+
+      - name: Install pinned browser test runtime
+        shell: bash
+        run: |
+          PLAYWRIGHT_ROOT="$RUNNER_TEMP/openmockup-playwright"
+          mkdir -p "$PLAYWRIGHT_ROOT"
+          npm install --prefix "$PLAYWRIGHT_ROOT" --no-save --package-lock=false --ignore-scripts playwright@1.55.0
+          echo "OPENMOCKUP_PLAYWRIGHT_ROOT=$PLAYWRIGHT_ROOT" >> "$GITHUB_ENV"
+          echo "OPENMOCKUP_PLAYWRIGHT_MODULE=$PLAYWRIGHT_ROOT/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_ROOT/browsers" >> "$GITHUB_ENV"
+
+      - name: Install Chromium
+        shell: bash
+        run: "$OPENMOCKUP_PLAYWRIGHT_ROOT/node_modules/.bin/playwright install --with-deps chromium"
+
+      - name: Run browser export smoke
+        run: node scripts/e2e-demo.mjs
