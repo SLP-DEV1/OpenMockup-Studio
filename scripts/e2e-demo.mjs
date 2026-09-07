@@ -1,8 +1,14 @@
 import { spawn } from "node:child_process";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import process from "node:process";
-import { chromium } from "playwright";
+
+const playwrightModule = process.env.OPENMOCKUP_PLAYWRIGHT_MODULE || "playwright";
+const playwrightSpecifier = playwrightModule.startsWith("/")
+  ? pathToFileURL(playwrightModule).href
+  : playwrightModule;
+const { chromium } = await import(playwrightSpecifier);
 
 const HOST = "127.0.0.1";
 const PORT = 4173;
