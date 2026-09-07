@@ -6,6 +6,8 @@ The project follows a lightweight changelog format.
 
 ## Unreleased
 
+## 0.19.1 - 2026-09-07
+
 ### Security and privacy
 
 - Isolated PSD/Photopea design assets from the local Vite application server. `npm run dev:public` now tunnels only a dedicated asset server on a separate localhost port; the OpenMockup UI itself is never exposed through the temporary Cloudflare Tunnel.
