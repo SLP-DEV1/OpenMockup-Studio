@@ -6,8 +6,8 @@ The roadmap is ordered by expected user value and by the technical foundation ea
 
 - [x] Reproducible installs, strict type checks, automated tests, and CI
 - [x] Extract testable mockup, persistence, and preview-cache modules from `App.tsx`
-- [ ] Add component-level tests for file selection, presets, and batch cancellation
-- [ ] Add browser-based export smoke tests with small generated fixtures
+- [x] Add a browser-based export smoke covering sample loading, real file selection, preview, preset download, and batch ZIP export
+- [ ] Add deeper component-level tests for preset editing and cancellation edge cases
 
 ## Editing and realism
 
@@ -18,6 +18,7 @@ The roadmap is ordered by expected user value and by the technical foundation ea
 
 ## Reliability and performance
 
+- [x] Bound retained preview memory after large batch exports
 - [ ] Faster batch previews with controlled parallel image rendering
 - [ ] Better PSD timeout recovery and resumable batch exports
 - [ ] Export manifest import for retrying only failed combinations
@@ -25,6 +26,7 @@ The roadmap is ordered by expected user value and by the technical foundation ea
 
 ## Hosting and distribution
 
+- [x] Isolate the temporary PSD asset tunnel from the local application server
 - [ ] Authenticated self-hosted asset service with rate limits
 - [x] Static image-mode demo deployment via GitHub Pages
 - [x] Versioned releases and downloadable Windows packages
